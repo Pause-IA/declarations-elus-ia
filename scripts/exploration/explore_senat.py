@@ -1,33 +1,15 @@
-"""Exploration : passages des débats du Sénat qui touchent à l'IA, et parmi
-eux ceux qui touchent à la superintelligence et aux risques extrêmes."""
+"""Exploration : interventions en séance du Sénat qui parlent d'IA ou
+contiennent un mot-clé (voir motscles.py)."""
 import csv
 import re
-import unicodedata
 import zipfile
 from collections import Counter
+from datetime import date
 from html.parser import HTMLParser
 
-DEPUIS = "20240701"   # same window as the Assemblée exploration
+from motscles import analyser, decrire
 
-EXPRESSIONS = {
-    "superintelligence": r"super[- ]?intelligen",
-    "IA générale": r"intelligences? artificielles? generales?|\bia generale",
-    "extinction": r"extinction de l.(humanite|espece humaine)",
-    "singularité technologique": r"singularite technologique",
-    "auto-amélioration": r"auto[- ]?amelioration",
-    "PauseIA": r"pause ?ia\b",
-}
-SIGLES = {"AGI": r"\bAGI\b", "IAG": r"\bIAG\b"}
-SI_IA = {
-    "perte de contrôle": r"perte de (la )?(controle|maitrise)",
-    "risque existentiel": r"risques? existentiels?",
-}
-IA = r"intelligence artificielle|\bia\b"
-
-
-def norm(s):
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
-    return s.lower()
+DEPUIS = "20240701"   # same window as the Assemblée
 
 
 class Interventions(HTMLParser):
@@ -69,6 +51,7 @@ class Interventions(HTMLParser):
 
 
 def decoder(brut):
+    """Files are ISO-8859-1 or UTF-8: use the encoding they declare."""
     m = re.search(rb'encoding="([^"]+)"', brut[:200])
     return brut.decode(m.group(1).decode() if m else "utf-8", "replace")
 
@@ -80,11 +63,21 @@ def ecrire(nom_fichier, lignes):
         w.writerows(lignes)
 
 
+aujourdhui = date.today().strftime("%Y%m%d")
 z = zipfile.ZipFile("senat-cri.zip")
-fichiers = sorted(n for n in z.namelist()
-                  if re.fullmatch(r"cri/d\d{8}\.xml", n) and n[5:13] >= DEPUIS)
-hits, ia, par_mot, orateurs_ia = [], [], Counter(), Counter()
-nb_interventions = 0
+fichiers = []
+for n in sorted(z.namelist()):
+    if not re.fullmatch(r"cri/d\d{8}\.xml", n) or n[5:13] < DEPUIS:
+        continue
+    # A file named after a future day is a typo (d20261204 = 4 Dec 2025?):
+    # never trust it, or it would pass for the most recent sitting.
+    if n[5:13] > aujourdhui:
+        print(f"⚠ ignoré, daté dans le futur : {n}")
+        continue
+    fichiers.append(n)
+
+retenus, par_famille, par_mot, orateurs = [], Counter(), Counter(), Counter()
+nb_lus = nb_ia = 0
 for nom_fichier in fichiers:
     jour = f"{nom_fichier[5:9]}-{nom_fichier[9:11]}-{nom_fichier[11:13]}"
     parser = Interventions()
@@ -94,41 +87,36 @@ for nom_fichier in fichiers:
         qualite = attrs.get("qua", "")
         if qualite.startswith("présid") and "séance" in qualite:
             continue  # chairing the sitting, not taking a position
-        nb_interventions += 1
-        n = norm(brut)
-        parle_ia = bool(re.search(IA, n))
-        trouves = [k for k, rx in EXPRESSIONS.items() if re.search(rx, n)]
-        trouves += [k for k, rx in SIGLES.items() if re.search(rx, brut)]
-        if parle_ia:
-            trouves += [k for k, rx in SI_IA.items() if re.search(rx, n)]
-        if not (parle_ia or trouves):
+        nb_lus += 1
+        parle_ia, familles = analyser(brut)
+        if not (parle_ia or familles):
             continue
+        nb_ia += parle_ia
         orateur = f"{attrs.get('civ', '')} {attrs.get('nom', '')}".strip()
-        ligne = {"date": jour, "matricule": attrs.get("mat", ""),
-                 "orateur": orateur, "qualite": qualite,
-                 "mots": ", ".join(trouves), "texte": brut,
-                 "fichier": nom_fichier}
-        if parle_ia:
-            ia.append(ligne)
-            orateurs_ia[(ligne["matricule"], orateur)] += 1
-        if trouves:
-            hits.append(ligne)
-            par_mot.update(trouves)
+        matricule = attrs.get("mat", "")
+        retenus.append({"date": jour, "matricule": matricule, "orateur": orateur,
+                        "qualite": qualite,
+                        "parle_ia": "oui" if parle_ia else "non",
+                        "mots_cles": decrire(familles), "texte": brut,
+                        "fichier": nom_fichier})
+        orateurs[(matricule, orateur)] += 1
+        for famille, mots in familles.items():
+            par_famille[famille] += 1
+            par_mot.update(f"{famille} › {m}" for m in mots)
 
 print(f"{len(fichiers)} jours de séance, du {fichiers[0][5:13]} au {fichiers[-1][5:13]}")
-print(f"{nb_interventions} interventions lues (hors présidence de séance)")
-print(f"{len(ia)} parlent d'IA, par {len(orateurs_ia)} orateurs différents")
-print(f"{len(hits)} touchent aux risques extrêmes\n")
-print("Par mot-clé :")
+print(f"{nb_lus} interventions lues (hors présidence de séance)")
+print(f"{len(retenus)} retenues, dont {nb_ia} parlent d'IA explicitement, "
+      f"par {len(orateurs)} orateurs différents\n")
+print("Par famille de mots-clés (interventions) :")
+for k, v in par_famille.most_common():
+    print(f"  {v:4}  {k}")
+print("\nPar mot-clé :")
 for k, v in par_mot.most_common():
     print(f"  {v:4}  {k}")
-print("\nQui parle le plus d'IA en séance :")
-for (mat, nom), v in orateurs_ia.most_common(15):
+print("\nOrateurs les plus fréquents :")
+for (mat, nom), v in orateurs.most_common(15):
     print(f"  {v:4}  {mat:8}  {nom}")
-print("\nInterventions sur l'IA par année :")
-for annee, v in sorted(Counter(l["date"][:4] for l in ia).items()):
-    print(f"  {annee}  {v}")
 
-ecrire("resultats_senat.csv", hits)
-ecrire("interventions_ia_senat.csv", ia)
-print("\nDétail : resultats_senat.csv, interventions_ia_senat.csv")
+ecrire("passages_senat.csv", retenus)
+print("\nDétail : passages_senat.csv")
