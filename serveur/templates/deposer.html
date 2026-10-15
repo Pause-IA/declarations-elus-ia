@@ -40,5 +40,16 @@
   Un fichier illisible est refusé sans remplacer celui qui marche, et la version
   précédente est conservée. Les deux peuvent être déposés d'un coup.
 </p>
+
+<form method="post" action="{{ url_for('recharger') }}" class="carte">
+  <label>Recharger la page depuis le dépôt</label>
+  <p class="hint">
+    Réinstalle <code>page/index.html</code> tel qu'il est sur
+    <code>{{ depot }}</code>, branche <code>{{ branche }}</code>. À utiliser
+    quand vous avez poussé votre page sur GitHub : sans ça, c'est la dernière
+    page déposée ici qui reste affichée.
+  </p>
+  <button type="submit">Recharger depuis le dépôt</button>
+</form>
 <footer><a href="{{ url_for('deconnexion') }}">Se déconnecter</a></footer>
 {% endblock %}

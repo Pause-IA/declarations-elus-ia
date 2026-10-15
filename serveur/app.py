@@ -24,6 +24,8 @@ veille aura fait ses preuves.
 import json
 import os
 import secrets
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -56,6 +58,34 @@ TAILLE_MAX = 32 * 1024 * 1024
 
 MOT_DE_PASSE = os.environ.get("VEILLE_PASSWORD", "")
 JETON = os.environ.get("VEILLE_UPLOAD_TOKEN", "")
+
+# Recharger la page depuis le dépôt, pour que celui-ci reste la seule
+# référence. Sans ça il y a deux copies d'`index.html` — celle du dépôt et
+# celle déposée — et c'est la déposée qui s'affiche : on modifie la page, on
+# pousse, et rien ne change en ligne sans comprendre pourquoi.
+#
+# L'adresse est construite à partir de la CONFIGURATION, jamais de ce que
+# l'utilisateurice envoie. Un champ « URL à charger » ferait de ce service un
+# moyen d'aller frapper n'importe quelle machine depuis l'intérieur du réseau.
+DEPOT = os.environ.get("VEILLE_DEPOT", "Pause-IA/declarations-elus-ia")
+BRANCHE = os.environ.get("VEILLE_BRANCHE", "main")
+CHEMIN_PAGE = "page/index.html"
+# Seulement si le dépôt passe en privé un jour.
+JETON_GITHUB = os.environ.get("VEILLE_GITHUB_TOKEN", "")
+
+
+def url_page_depot():
+    return (f"https://raw.githubusercontent.com/{DEPOT}/{BRANCHE}/{CHEMIN_PAGE}")
+
+
+def lire_page_depot():
+    """Le contenu de `page/index.html` sur le dépôt, ou une exception."""
+    requete = urllib.request.Request(
+        url_page_depot(), headers={"User-Agent": "veille-elus-ia"})
+    if JETON_GITHUB:
+        requete.add_header("Authorization", f"Bearer {JETON_GITHUB}")
+    with urllib.request.urlopen(requete, timeout=30) as reponse:
+        return reponse.read(TAILLE_MAX + 1)
 
 app = Flask(__name__)
 # Sans clé fixée, les sessions ne survivent pas à un redémarrage : on se
@@ -216,7 +246,31 @@ def deposer():
             ecrire(nom, contenu)
             flash(f"{nom} déposé.", "success")
         return redirect(url_for("deposer"))
-    return render_template("deposer.html", etat=etat())
+    return render_template("deposer.html", etat=etat(),
+                           depot=DEPOT, branche=BRANCHE)
+
+
+@app.route("/recharger", methods=["POST"])
+@connexion_requise
+def recharger():
+    """Réinstaller la page telle qu'elle est sur le dépôt.
+
+    Même validation que le dépôt manuel : si le dépôt est injoignable ou la
+    page illisible, celle en service n'est pas touchée.
+    """
+    try:
+        contenu = lire_page_depot()
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        flash(f"Dépôt injoignable, rien n'a changé : {type(exc).__name__}: {exc}.",
+              "error")
+        return redirect(url_for("deposer"))
+    ok, pourquoi = valide("index.html", contenu)
+    if not ok:
+        flash(f"Page du dépôt refusée, rien n'a changé : {pourquoi}.", "error")
+        return redirect(url_for("deposer"))
+    ecrire("index.html", contenu)
+    flash(f"Page rechargée depuis {DEPOT} ({BRANCHE}).", "success")
+    return redirect(url_for("deposer"))
 
 
 @app.route("/televerser", methods=["POST"])

@@ -52,6 +52,22 @@ Le champ décide du nom écrit, pas celui du fichier choisi — déposer
 Un fichier illisible est refusé **avant** de remplacer celui qui marche, le
 remplacement est atomique, et la version précédente reste en `.bak`.
 
+### Mettre la page à jour depuis le dépôt
+
+Il y a deux copies d'`index.html` : celle du dépôt (`page/index.html`) et celle
+déposée. **C'est la déposée qui s'affiche** — modifier la page dans le dépôt et
+pousser ne change donc rien en ligne.
+
+Le bouton « Recharger depuis le dépôt », sur `/deposer`, réinstalle
+`page/index.html` tel qu'il est sur la branche `main`. Le dépôt redevient la
+seule référence : on pousse, on clique, c'est en ligne. Si le dépôt est
+injoignable ou la page illisible, celle en service n'est pas touchée.
+
+Réglable par `VEILLE_DEPOT` et `VEILLE_BRANCHE`, et `VEILLE_GITHUB_TOKEN` si le
+dépôt passe en privé. L'adresse est construite à partir de cette configuration
+et jamais de la requête : un champ « URL à charger » ferait de ce service un
+moyen de frapper n'importe quelle machine depuis l'intérieur du réseau.
+
 Pour un script, le jour où la génération tournera dans un timer :
 
     curl -F fichier=@synthese_elus.json \

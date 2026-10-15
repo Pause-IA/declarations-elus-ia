@@ -167,6 +167,56 @@ class ServeurTests(unittest.TestCase):
             content_type="multipart/form-data")
         self.assertEqual(r.status_code, 400)
 
+    # --- recharger depuis le dépôt ---------------------------------------
+    def test_recharger_demande_une_connexion(self):
+        self.assertEqual(self.client.post("/recharger").status_code, 302)
+
+    def test_le_bouton_est_sur_la_page_de_depot(self):
+        self.connecte()
+        page = self.client.get("/deposer").data.decode()
+        self.assertIn("Recharger depuis le dépôt", page)
+        self.assertIn("declarations-elus-ia", page)
+
+    def test_recharger_installe_la_page_du_depot(self):
+        self.connecte()
+        self.module.lire_page_depot = lambda: b"<html>version du depot</html>"
+        self.client.post("/recharger", follow_redirects=True)
+        self.assertIn(b"version du depot", self.client.get("/").data)
+
+    def test_un_depot_injoignable_ne_touche_a_rien(self):
+        self.connecte()
+        self.depose_formulaire("page", "index.html", b"<html>en service</html>")
+
+        def tombe():
+            raise OSError("name or service not known")
+
+        self.module.lire_page_depot = tombe
+        r = self.client.post("/recharger", follow_redirects=True)
+        self.assertIn("injoignable", r.data.decode())
+        self.assertIn(b"en service", self.client.get("/").data)
+
+    def test_une_page_illisible_sur_le_depot_est_refusee(self):
+        self.connecte()
+        self.depose_formulaire("page", "index.html", b"<html>en service</html>")
+        self.module.lire_page_depot = lambda: b""
+        r = self.client.post("/recharger", follow_redirects=True)
+        self.assertIn("refusée", r.data.decode())
+        self.assertIn(b"en service", self.client.get("/").data)
+
+    def test_ladresse_vient_de_la_configuration_pas_de_la_requete(self):
+        """Un champ « URL à charger » ferait de ce service un moyen d'aller
+        frapper n'importe quelle machine depuis l'intérieur du réseau."""
+        self.assertEqual(
+            self.module.url_page_depot(),
+            "https://raw.githubusercontent.com/Pause-IA/declarations-elus-ia"
+            "/main/page/index.html")
+        appels = []
+        self.module.lire_page_depot = lambda: appels.append(1) or b"<html>x</html>"
+        self.connecte()
+        self.client.post("/recharger", data={"url": "http://169.254.169.254/"},
+                         follow_redirects=True)
+        self.assertEqual(len(appels), 1)
+
     def test_la_sante_repond_sans_connexion(self):
         r = self.client.get("/sante")
         self.assertEqual(r.status_code, 200)
