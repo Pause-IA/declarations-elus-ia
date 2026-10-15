@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titre %}Déposer · Veille élu·es et IA{% endblock %}
+{% block contenu %}
+<h1>Déposer la veille</h1>
+<p class="hint">
+  Les fichiers sont produits par les scripts de ce dépôt, sur votre machine.
+  Déposez-les ici : la page se consulte ensuite sur <a href="{{ url_for('page') }}">la page d'accueil</a>.
+</p>
+
+<form method="post" enctype="multipart/form-data" class="carte">
+  <div class="champ">
+    <label for="donnees">Données — <code>synthese_elus.json</code></label>
+    <input type="file" id="donnees" name="donnees" accept=".json,application/json">
+    <p class="hint">
+      {% if etat.donnees %}
+        Dernier dépôt le {{ etat.donnees }}{% if etat.personnes %}, {{ etat.personnes }} personne(s){% endif %}.
+      {% else %}
+        Aucun fichier déposé : la page reste vide tant qu'il manque.
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="champ">
+    <label for="page">Page — <code>index.html</code></label>
+    <input type="file" id="page" name="page" accept=".html,text/html">
+    <p class="hint">
+      {% if etat.page %}
+        Dernier dépôt le {{ etat.page }}.
+      {% else %}
+        Aucune page déposée : celle livrée avec l'application est utilisée.
+      {% endif %}
+      Facultatif, seulement quand la présentation change.
+    </p>
+  </div>
+
+  <button type="submit">Déposer</button>
+</form>
+
+<p class="hint">
+  Un fichier illisible est refusé sans remplacer celui qui marche, et la version
+  précédente est conservée. Les deux peuvent être déposés d'un coup.
+</p>
+<footer><a href="{{ url_for('deconnexion') }}">Se déconnecter</a></footer>
+{% endblock %}

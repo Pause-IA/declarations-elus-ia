@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block titre %}Connexion · Veille élu·es et IA{% endblock %}
+{% block contenu %}
+<h1>Veille élu·es et IA</h1>
+<p class="hint">Document interne à Pause IA. Demandez le mot de passe à l'équipe tech.</p>
+<form method="post" class="carte">
+  <div class="champ">
+    <label for="mot_de_passe">Mot de passe</label>
+    <input type="password" id="mot_de_passe" name="mot_de_passe" autofocus required>
+  </div>
+  <button type="submit">Entrer</button>
+</form>
+{% endblock %}
