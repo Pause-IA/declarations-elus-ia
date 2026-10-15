@@ -26,8 +26,7 @@ python3 ../scripts/exploration/explore_senat.py
 python3 ../scripts/exploration/explore_pe.py
 ```
 
-`explore_pe.py` lit pour l'instant la liste des eurodéputé·es français·es dans une
-copie locale de la base du CRM (`../French-NGO-CRM/meetings.db`). Prochaine étape :
-la récupérer directement depuis l'API du Parlement européen.
+`explore_pe.py` récupère la liste des eurodéputé·es français·es en poste
+directement depuis l'API du Parlement européen : rien d'autre à installer.
 
 Chaque script affiche un résumé et écrit le détail en CSV.

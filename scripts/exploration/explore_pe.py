@@ -3,7 +3,6 @@ parlent d'IA, et parmi elles celles qui touchent aux risques extrêmes."""
 import csv
 import json
 import re
-import sqlite3
 import time
 import unicodedata
 import urllib.parse
@@ -12,7 +11,7 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 
 API = "https://data.europarl.europa.eu/api/v2/speeches"
-CRM_DB = "../French-NGO-CRM/meetings.db"
+API_MEPS = "https://data.europarl.europa.eu/api/v2/meps/show-current"
 # The API also searches translations, but both languages are queried so that
 # nothing is lost if one index lags behind.
 RECHERCHES = [("intelligence artificielle", "fr"), ("artificial intelligence", "en")]
@@ -42,21 +41,18 @@ def norm(s):
 
 
 def eurodeputes_fr():
-    """{European Parliament id: name}, read from the CRM's own fiches."""
-    con = sqlite3.connect(f"file:{CRM_DB}?mode=ro", uri=True)
-    ids = {}
-    for nom, url in con.execute(
-            "SELECT name, fiche_url FROM persons "
-            "WHERE fiche_url LIKE '%europarl.europa.eu/meps/%'"):
-        m = re.search(r"/meps/\w+/(\d+)", url)
-        if m:
-            ids[m.group(1)] = nom
-    con.close()
-    return ids
+    """{European Parliament id: {"nom", "groupe"}} for the French MEPs in
+    office, straight from the Parliament's API, so no CRM copy is needed."""
+    rep = appel({"country-of-representation": "FR",
+                 "format": "application/ld+json"}, API_MEPS)
+    return {m["identifier"]: {
+                "nom": f"{m.get('givenName', '')} {m.get('familyName', '')}".strip(),
+                "groupe": m.get("api:political-group", ""),
+            } for m in rep.get("data", [])}
 
 
-def appel(params):
-    url = API + "?" + urllib.parse.urlencode(params)
+def appel(params, adresse=API):
+    url = adresse + "?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": "PauseIA-veille-exploration"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return {} if r.status == 204 else json.load(r)
@@ -107,7 +103,7 @@ def ecrire(nom_fichier, lignes):
 
 
 fr = eurodeputes_fr()
-print(f"{len(fr)} eurodéputé·es français·es dans le CRM")
+print(f"{len(fr)} eurodéputé·es français·es en poste (API du Parlement européen)")
 tout = {}
 for texte, langue in RECHERCHES:
     r = toutes(texte, langue)
@@ -133,10 +129,11 @@ for id_, (meta, xml_text) in tout.items():
         for r in (meta or {}).get("recorded_in_a_realization_of", [])
         for u in r.get("originalLanguage", []))
     ligne = {"date": (meta or {}).get("activity_date", ""), "id_pe": pid,
-             "orateur": fr[pid], "langue": langue, "origine": origine,
+             "orateur": fr[pid]["nom"], "groupe": fr[pid]["groupe"],
+             "langue": langue, "origine": origine,
              "mots": ", ".join(trouves), "texte": texte, "id": id_}
     ia.append(ligne)
-    orateurs[(pid, fr[pid])] += 1
+    orateurs[(pid, fr[pid]["nom"])] += 1
     langues[(langue, origine)] += 1
     if trouves:
         hits.append(ligne)
