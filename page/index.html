@@ -21,6 +21,22 @@
   .alerte { background: #fff8e6; border: 1px solid #f0d58c; border-radius: 8px;
             padding: 10px 14px; margin-bottom: 20px; font-size: .93rem; }
 
+  .alertes { background: #fdf0ef; border: 1px solid #f1b8b2; border-radius: 10px;
+             padding: 12px 14px; margin-bottom: 20px; }
+  .alertes h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  .alertes .note { color: var(--doux); font-size: .82rem; margin: 0 0 8px; }
+  .alertes ul { list-style: none; margin: 0; padding: 0; }
+  .alertes li { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px;
+                align-items: center; padding: 8px 0; border-top: 1px solid #f1d3cf; }
+  .alertes li .mots { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .alertes button { font: inherit; font-size: .82rem; cursor: pointer; padding: 4px 10px;
+                    border-radius: 6px; border: 1px solid var(--bord); background: #fff; }
+  .alertes button.traiter { border-color: var(--accent); color: var(--accent); }
+  .alertes.calme { background: var(--carte); border-color: var(--bord); }
+  .nouveau { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+             color: #fff; background: var(--risques); border-radius: 4px; padding: 1px 6px;
+             margin-left: 6px; vertical-align: 2px; }
+
   .filtres { display: grid; gap: 12px; grid-template-columns: minmax(0,2fr) repeat(3, minmax(0,1fr));
              background: var(--carte); border: 1px solid var(--bord);
              border-radius: 10px; padding: 14px; margin-bottom: 12px; }
@@ -69,6 +85,8 @@
     .personne summary { grid-template-columns: 52px 1fr; }
     .stats { grid-column: 2; text-align: left; }
     .badges { grid-column: 1 / 3; }
+    .alertes li { grid-template-columns: auto auto 1fr; }
+    .alertes li .nom { grid-column: 1 / -1; }
   }
 </style>
 </head>
@@ -78,6 +96,8 @@
   <p class="sous-titre" id="sous-titre">Chargement…</p>
   <p class="alerte">Repérage automatique par mots-clés : <strong>lisez l'extrait avant de contacter quelqu'un.</strong>
     Document interne à PauseIA, à ne pas diffuser.</p>
+
+  <section class="alertes" id="alertes" aria-live="polite"></section>
 
   <div class="filtres">
     <label>Rechercher un nom
@@ -127,8 +147,26 @@ const FAMILLES = {
   "Entreprises et produits": { court: "Entreprises", couleur: "var(--entreprises)" },
 };
 const ELUS = ["Assemblée nationale", "Sénat", "Parlement européen"];
+const FENETRE_JOURS = 14;  // un passage reste « nouveau » pendant 14 jours
 let donnees = null;
 let profil = "tous";
+let limiteNouveau = "";    // date (AAAA-MM-JJ) à partir de laquelle c'est nouveau
+
+// Suivi « traité » : enregistré dans ce navigateur uniquement
+function cleP(p) { return p.chambre + "|" + p.nom; }
+function lireTraites() {
+  try { return JSON.parse(localStorage.getItem("veille-traites")) || {}; } catch { return {}; }
+}
+function ecrireTraites(t) {
+  try { localStorage.setItem("veille-traites", JSON.stringify(t)); } catch { /* navigateur privé */ }
+}
+function passageNouveau(pa) {
+  return pa.vu_le && pa.vu_le >= limiteNouveau && pa.poids >= donnees.seuil_alerte;
+}
+function aTraiter(p) {
+  return p.nouveau_le && p.nouveau_le >= limiteNouveau
+    && (lireTraites()[cleP(p)] || "") < p.nouveau_le;
+}
 
 // Échappe le texte avant de l'insérer dans la page (évite d'interpréter du HTML)
 function esc(s) {
@@ -181,7 +219,7 @@ function afficher(res) {
       <summary>
         <span class="score"><b>${p.score}</b>
           <span class="barre"><i style="width:${Math.round(100 * p.score / max)}%"></i></span></span>
-        <span><span class="nom">${esc(p.nom)}</span><br>
+        <span><span class="nom">${esc(p.nom)}</span>${aTraiter(p) ? `<span class="nouveau">Nouveau</span>` : ""}<br>
           <span class="meta">${esc(p.chambre)}${p.groupe ? " · " + esc(p.groupe) : ""}</span></span>
         <span class="stats">${p.nb_passages} passage${p.nb_passages > 1 ? "s" : ""}<br>
           dernier : ${dateFr(p.derniere_date)}</span>
@@ -200,7 +238,7 @@ document.getElementById("liste").addEventListener("toggle", ev => {
     const forte = Object.keys(pa.mots)[0];
     const couleur = forte ? (FAMILLES[forte]?.couleur || "var(--bord)") : "var(--bord)";
     return `<article class="passage" style="--c:${couleur}">
-      <header>${dateFr(pa.date)} · ${esc(pa.type)} ${badges(pa.mots)}</header>
+      <header>${dateFr(pa.date)} · ${esc(pa.type)} ${badges(pa.mots)}${passageNouveau(pa) ? `<span class="nouveau">Nouveau</span>` : ""}</header>
       <p>${esc(pa.extrait)}</p>
       ${pa.lien ? `<a href="${esc(pa.lien)}" target="_blank" rel="noopener">Voir la source</a>` : ""}
     </article>`;
@@ -208,7 +246,64 @@ document.getElementById("liste").addEventListener("toggle", ev => {
   fiche.dataset.rempli = "1";
 }, true);
 
+// Bandeau des nouveautés à traiter
+function afficherAlertes() {
+  const zone = document.getElementById("alertes");
+  const liste = donnees.personnes.filter(aTraiter);
+  zone.classList.toggle("calme", !liste.length);
+  if (!liste.length) {
+    zone.innerHTML = `<h2>Aucune nouvelle alerte à traiter</h2>
+      <p class="note">Les passages importants repérés depuis moins de ${FENETRE_JOURS} jours apparaîtront ici.</p>`;
+    return;
+  }
+  zone.innerHTML = `
+    <h2>🔔 ${liste.length} nouvelle${liste.length > 1 ? "s" : ""} alerte${liste.length > 1 ? "s" : ""} à traiter</h2>
+    <p class="note">Passages importants repérés depuis moins de ${FENETRE_JOURS} jours.
+      « Traité » est enregistré dans ce navigateur seulement.</p>
+    <ul>${liste.map(p => {
+      const mots = {};
+      p.passages.filter(passageNouveau).forEach(pa =>
+        Object.entries(pa.mots)
+          .filter(([f]) => (donnees.poids[f] || 0) >= donnees.seuil_alerte)
+          .forEach(([f, l]) => (mots[f] = [...new Set([...(mots[f] || []), ...l])])));
+      return `<li data-cle="${esc(cleP(p))}">
+        <span class="nom"><strong>${esc(p.nom)}</strong> · ${esc(p.chambre)}</span>
+        <button type="button" class="voir">Voir</button>
+        <button type="button" class="traiter">Marquer comme traité</button>
+        <span class="mots">${badges(mots)}</span>
+      </li>`;
+    }).join("")}</ul>`;
+}
+
+document.getElementById("alertes").addEventListener("click", ev => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  const p = donnees.personnes.find(x => cleP(x) === b.closest("li").dataset.cle);
+  if (b.classList.contains("traiter")) {
+    const t = lireTraites();
+    t[cleP(p)] = p.nouveau_le;
+    ecrireTraites(t);
+    afficherAlertes();
+    filtrer();
+  } else {
+    // « Voir » : on isole la personne dans la liste et on ouvre sa fiche
+    document.getElementById("recherche").value = p.nom;
+    document.getElementById("chambre").value = "tous";
+    document.getElementById("source").value = "tous";
+    profil = "tous";
+    document.querySelectorAll("#profils button").forEach(x =>
+      x.setAttribute("aria-pressed", x.dataset.profil === "tous"));
+    filtrer();
+    const fiche = [...document.querySelectorAll(".personne")].find(f => f.dataset.chambre === p.chambre);
+    if (fiche) { fiche.open = true; fiche.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }
+});
+
 function initialiser() {
+  const d = new Date(donnees.genere_le + "T12:00:00");
+  d.setDate(d.getDate() - FENETRE_JOURS);
+  limiteNouveau = d.toISOString().slice(0, 10);
+  afficherAlertes();
 
   document.getElementById("sous-titre").textContent =
     `Mise à jour du ${dateFr(donnees.genere_le)} · ${donnees.personnes.length} personnes · Assemblée nationale, Sénat, Parlement européen`;

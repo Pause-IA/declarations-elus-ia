@@ -64,6 +64,8 @@ RE_IA = re.compile(IA, re.I)
 SORTIE = "synthese_elus.csv"
 SORTIE_JSON = "synthese_elus.json"
 DEJA_VUS = "deja_vus.json"  # mémoire : date de première apparition de chaque passage
+SEUIL_ALERTE = 4  # poids minimal d'un passage pour déclencher une alerte
+
 
 def nettoyer_nom(nom):
     """« M. Alexandre BASQUIN (CRCE-K) » -> « Alexandre Basquin »."""
@@ -140,11 +142,12 @@ def main():
             if candidat[:2] > e["meilleur"][:2]:
                 e["meilleur"] = candidat
             identifiant = hashlib.sha1(f"{k}|{empreinte}".encode()).hexdigest()[:16]
-            vu_le = vus.setdefault(identifiant, "" if premier_lancement else aujourdhui)    
+            vu_le = vus.setdefault(identifiant, "" if premier_lancement else aujourdhui)
             e["liste"].append({
                 "date": row.get("date", ""), "type": type_, "poids": poids,
                 "mots": {f: sorted(m) for f, m in familles.items()},
                 "extrait": extrait(texte), "lien": row.get("url", ""),
+                "vu_le": vu_le,
             })
 
     # Score final : poids des mots-clés + 1 point par passage IA (plafonné à 10)
@@ -180,12 +183,17 @@ def main():
             "mots": {f: sorted(e["mots"][f]) for f in ORDRE if e["mots"].get(f)},
             "premiere_date": dates[0] if dates else "",
             "derniere_date": dates[-1] if dates else "",
+            "nouveau_le": max((p["vu_le"] for p in e["liste"] if p["poids"] >= SEUIL_ALERTE),
+                              default=""),
             "passages": sorted(e["liste"], key=lambda p: (p["poids"], p["date"]), reverse=True),
         })
     with open(SORTIE_JSON, "w", encoding="utf-8") as f:
         json.dump({"genere_le": date.today().isoformat(), "poids": POIDS,
-                   "poids_mots": POIDS_MOTS, "personnes": personnes},
+                   "poids_mots": POIDS_MOTS, "seuil_alerte": SEUIL_ALERTE, "personnes": personnes},
                   f, ensure_ascii=False, indent=1)
+
+    alertes = [p["nom"] for p in personnes if p["nouveau_le"] == aujourdhui]
+    print(f"🔔 {len(alertes)} alerte(s) aujourd'hui : {', '.join(alertes)}")
 
     print(f"\n{len(classement)} personnes au total")
     for chambre in ("Assemblée nationale", "Sénat", "Parlement européen",
