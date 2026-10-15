@@ -24,7 +24,9 @@ FAMILLES = {
         "IA générale": (r"intelligences? artificielles? generales?|\bia generale"
                         r"|artificial general intelligence", "partout"),
         # « agi » is a French past participle; « AGI-SON » an association.
-        "AGI / IAG": (r"(?<![\w-])(AGI|IAG)(?![\w-])", "casse"),
+        # « IAG » is left out: French texts use it for « IA générative » as
+        # often as for « IA générale », which the spelled-out form catches.
+        "AGI": (r"(?<![\w-])AGI(?![\w-])", "casse"),
         "extinction": (r"extinction de l.(humanite|espece humaine)|human extinction",
                        "partout"),
         "singularité": (r"singularite technologique|technological singularity",

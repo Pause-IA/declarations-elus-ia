@@ -25,6 +25,8 @@ for r in csv.DictReader(open(fichier, encoding="utf-8")):
         for mot in mots.split(", "):
             if famille not in filtres and mot not in filtres:
                 continue
+            if mot not in FAMILLES.get(famille, {}):
+                continue   # renamed or removed since this CSV was produced
             rx, mode = FAMILLES[famille][mot]
             texte = r["texte"] if mode.startswith("casse") else norm(r["texte"])
             m = re.search(rx, texte)
