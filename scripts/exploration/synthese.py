@@ -6,6 +6,9 @@ synthese_elus.csv (séparateur « ; », s'ouvre directement dans Excel).
 import csv
 import os
 import re
+import json
+import hashlib
+from datetime import date
 from collections import defaultdict
 
 from motscles import IA, analyser, norm
@@ -59,7 +62,8 @@ CIVILITE = re.compile(r"^(m\.|mme|monsieur|madame)\s+", re.I)
 PARENTHESE = re.compile(r"\s*\(.*?\)\s*$")
 RE_IA = re.compile(IA, re.I)
 SORTIE = "synthese_elus.csv"
-
+SORTIE_JSON = "synthese_elus.json"
+DEJA_VUS = "deja_vus.json"  # mémoire : date de première apparition de chaque passage
 
 def nettoyer_nom(nom):
     """« M. Alexandre BASQUIN (CRCE-K) » -> « Alexandre Basquin »."""
@@ -92,7 +96,9 @@ def lire(fichier):
 def main():
     elus = {}
     citations = defaultdict(set)  # personnalité -> élu·es qui la citent
-
+    aujourdhui = date.today().isoformat()
+    premier_lancement = not os.path.exists(DEJA_VUS)
+    vus = {} if premier_lancement else json.load(open(DEJA_VUS, encoding="utf-8"))
     for fichier, chambre, type_ in SOURCES:
         lignes = lire(fichier)
         print(f"  {len(lignes):5}  {fichier}")
@@ -113,6 +119,7 @@ def main():
                 "nom": nettoyer_nom(nom), "chambre": ch, "groupe": "",
                 "passages": set(), "types": set(), "mots": defaultdict(set),
                 "dates": [], "score": 0, "meilleur": (-1, "", "", ""),
+                "liste":[],
             })
             empreinte = (row.get("date", ""), texte[:200])
             if empreinte in e["passages"]:
@@ -132,12 +139,23 @@ def main():
             candidat = (poids, row.get("date", ""), extrait(texte), row.get("url", ""))
             if candidat[:2] > e["meilleur"][:2]:
                 e["meilleur"] = candidat
+            identifiant = hashlib.sha1(f"{k}|{empreinte}".encode()).hexdigest()[:16]
+            vu_le = vus.setdefault(identifiant, "" if premier_lancement else aujourdhui)    
+            e["liste"].append({
+                "date": row.get("date", ""), "type": type_, "poids": poids,
+                "mots": {f: sorted(m) for f, m in familles.items()},
+                "extrait": extrait(texte), "lien": row.get("url", ""),
+            })
 
     # Score final : poids des mots-clés + 1 point par passage IA (plafonné à 10)
     for e in elus.values():
         e["score"] += min(len(e["passages"]), 10)
 
     classement = sorted(elus.values(), key=lambda e: (-e["score"], e["nom"]))
+    with open(DEJA_VUS, "w", encoding="utf-8") as f:
+        json.dump(vus, f)
+    nouveaux = sum(1 for v in vus.values() if v == aujourdhui)
+    print(f"Mémoire : {len(vus)} passages connus, dont {nouveaux} vus pour la première fois aujourd'hui")
     with open(SORTIE, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(["score", "nom", "chambre", "groupe", "passages IA", "types",
@@ -152,6 +170,22 @@ def main():
                 dates[0] if dates else "", dates[-1] if dates else "",
                 e["meilleur"][2], e["meilleur"][3],
             ])
+    personnes = []
+    for e in classement:
+        dates = sorted(d for d in e["dates"] if d)
+        personnes.append({
+            "nom": e["nom"], "chambre": e["chambre"], "groupe": e["groupe"],
+            "score": e["score"], "nb_passages": len(e["passages"]),
+            "types": sorted(e["types"]),
+            "mots": {f: sorted(e["mots"][f]) for f in ORDRE if e["mots"].get(f)},
+            "premiere_date": dates[0] if dates else "",
+            "derniere_date": dates[-1] if dates else "",
+            "passages": sorted(e["liste"], key=lambda p: (p["poids"], p["date"]), reverse=True),
+        })
+    with open(SORTIE_JSON, "w", encoding="utf-8") as f:
+        json.dump({"genere_le": date.today().isoformat(), "poids": POIDS,
+                   "poids_mots": POIDS_MOTS, "personnes": personnes},
+                  f, ensure_ascii=False, indent=1)
 
     print(f"\n{len(classement)} personnes au total")
     for chambre in ("Assemblée nationale", "Sénat", "Parlement européen",
