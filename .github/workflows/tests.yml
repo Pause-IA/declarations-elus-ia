@@ -1,0 +1,26 @@
+# Les tests à chaque poussée, et sur chaque pull request.
+#
+# Minimal à dessein : les scripts d'exploration n'ont que la bibliothèque
+# standard, le service web n'ajoute que Flask. 3.12 est la version de l'image,
+# 3.13 signale à l'avance ce qu'une mise à jour casserait.
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install flask
+      - run: python -m unittest discover -s tests -v

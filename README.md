@@ -30,3 +30,66 @@ python3 ../scripts/exploration/explore_pe.py
 directement depuis l'API du Parlement européen : rien d'autre à installer.
 
 Chaque script affiche un résumé et écrit le détail en CSV.
+
+## La page de veille, en ligne
+
+La page est servie par une petite application Flask (`serveur/`), déployée dans
+son propre conteneur à côté du CRM. Elle fait deux choses : servir la page
+derrière un mot de passe, et accepter son dépôt depuis le navigateur.
+
+Pourquoi un service séparé du CRM plutôt qu'une route dedans : la veille évolue
+vite et appartient à ce projet, donc chaque changement n'a pas à passer par une
+relecture sur le dépôt du CRM. Et son JavaScript ne tourne pas sur l'origine du
+CRM, donc il ne peut rien lire des fiches ni des courriels.
+
+### Déposer les fichiers
+
+Depuis le navigateur, sur `/deposer`, après connexion : un champ pour
+`synthese_elus.json`, un autre pour `index.html` quand la présentation change.
+Le champ décide du nom écrit, pas celui du fichier choisi — déposer
+`synthese_2026-10-15.json` fonctionne.
+
+Un fichier illisible est refusé **avant** de remplacer celui qui marche, le
+remplacement est atomique, et la version précédente reste en `.bak`.
+
+### Mettre la page à jour depuis le dépôt
+
+Il y a deux copies d'`index.html` : celle du dépôt (`page/index.html`) et celle
+déposée. **C'est la déposée qui s'affiche** — modifier la page dans le dépôt et
+pousser ne change donc rien en ligne.
+
+Le bouton « Recharger depuis le dépôt », sur `/deposer`, réinstalle
+`page/index.html` tel qu'il est sur la branche `main`. Le dépôt redevient la
+seule référence : on pousse, on clique, c'est en ligne. Si le dépôt est
+injoignable ou la page illisible, celle en service n'est pas touchée.
+
+Réglable par `VEILLE_DEPOT` et `VEILLE_BRANCHE`, et `VEILLE_GITHUB_TOKEN` si le
+dépôt passe en privé. L'adresse est construite à partir de cette configuration
+et jamais de la requête : un champ « URL à charger » ferait de ce service un
+moyen de frapper n'importe quelle machine depuis l'intérieur du réseau.
+
+Pour un script, le jour où la génération tournera dans un timer :
+
+    curl -F fichier=@synthese_elus.json \
+         -H "X-Veille-Token: $VEILLE_UPLOAD_TOKEN" https://…/televerser
+
+### Déployer
+
+Le fichier de secrets, `/opt/volunteer-apps/secrets/veille-elus.env` :
+
+    VEILLE_PASSWORD=…            # ce que l'équipe plaidoyer saisit
+    VEILLE_SECRET_KEY=…          # openssl rand -hex 32, sinon les sessions
+                                 # tombent à chaque redémarrage
+    VEILLE_UPLOAD_TOKEN=…        # facultatif, seulement pour le dépôt par script
+
+Puis, sur le serveur :
+
+    sudo docker compose up -d --build
+
+Les fichiers déposés vivent dans `/opt/volunteer-apps/data/veille-elus`, hors
+de l'image : ils survivent aux reconstructions. La page livrée avec l'image
+sert tant que personne n'en a déposé une autre, donc un déploiement neuf
+affiche déjà quelque chose et il ne reste qu'à déposer le JSON.
+
+`/sante` répond sans connexion et dit si un fichier est déposé, pour vérifier
+que le conteneur répond.

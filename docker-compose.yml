@@ -1,0 +1,31 @@
+# Déploiement à côté du CRM, sur le même serveur et le même réseau Traefik,
+# mais en application séparée : elle évolue vite, elle appartient à ce projet,
+# et son JavaScript ne tourne pas sur l'origine du CRM — donc il ne peut rien
+# lire des fiches ni des courriels.
+services:
+  veille:
+    build: .
+    container_name: veille-elus-ia
+    restart: unless-stopped
+
+    # VEILLE_PASSWORD, VEILLE_SECRET_KEY et, si un script dépose, VEILLE_UPLOAD_TOKEN.
+    env_file:
+      - /opt/volunteer-apps/secrets/veille-elus.env
+
+    # Les fichiers déposés, hors de l'image.
+    volumes:
+      - /opt/volunteer-apps/data/veille-elus:/data
+
+    networks:
+      - web
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.veille-elus.rule=Host(`veille.pauseia.fr`)"
+      - "traefik.http.routers.veille-elus.entrypoints=websecure"
+      - "traefik.http.routers.veille-elus.tls.certresolver=lets-encrypt"
+      - "traefik.http.services.veille-elus.loadbalancer.server.port=8000"
+
+networks:
+  web:
+    external: true
