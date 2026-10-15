@@ -79,6 +79,10 @@ qu'évoquée au passage.
   (fonction `premier()`). Le fichier ne donne que l'identifiant de l'auteur : on
   lit son nom au début du texte (« M. X interroge… »), d'où une liste de verbes
   à compléter (`interpelle`, `expose`… manquaient).
+- **Titre de la ministre** : les questions adressées à la « ministre déléguée
+  chargée de l'intelligence artificielle et du numérique » contiennent toutes
+  « intelligence artificielle ». Ce titre est effacé avant la détection, sinon
+  toute question sur le numérique (2G, quantique…) compte comme parlant d'IA.
 - **Sénat** : le CSV est en iso-8859-1 avec des « ; ». Il ne contient que les
   titres : le texte complet est récupéré sur senat.fr, avec une pause d'une
   seconde entre deux pages.
@@ -135,8 +139,8 @@ passage sur l'IA (plafonné à 10).
 Ajustements : « contrôle humain » 2, Sam Altman 2, Arthur Mensch 1, Yann LeCun 1.
 Ces poids sont à valider avec l'équipe plaidoyer.
 
-Version du 15/10/2026 : 548 personnes, dont 278 député·es, 170 sénateur·ices,
-47 eurodéputé·es, 49 membres du gouvernement et 4 personnalités auditionnées.
+Version du 15/10/2026 : 514 personnes, dont 245 député·es, 170 sénateur·ices,
+47 eurodéputé·es, 48 membres du gouvernement et 4 personnalités auditionnées.
 
 ### Limites et suite
 
