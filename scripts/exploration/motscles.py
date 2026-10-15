@@ -11,7 +11,8 @@ import unicodedata
 
 # The passage talks about AI. « ai » is left out on purpose: in French it is
 # the verb (« j'ai »), and the few English speeches say "artificial intelligence".
-IA = r"intelligences? artificielles?|\bia\b|artificial intelligence"
+# « IA-IPR » are regional school inspectors, not artificial intelligence.
+IA = r"intelligences? artificielles?|\bia\b(?!-ipr)|artificial intelligence"
 
 # « Near » = within this many characters on either side, about two sentences:
 # a Sénat intervention can run for pages, so « in the same intervention »
@@ -34,8 +35,8 @@ FAMILLES = {
         "auto-amélioration": (r"auto[- ]?amelioration|self[- ]improv", "si_ia"),
         # Common in politics on their own (Ukraine, steel, public finances).
         "risque existentiel": (r"risques? existentiels?|existential risks?", "si_ia"),
-        "perte de contrôle": (r"perte de (la )?(controle|maitrise)|loss of control",
-                              "si_ia"),
+        "perte de contrôle": (r"perte de (la )?(controle|maitrise|supervision)"
+                              r"|loss of (control|oversight)", "si_ia"),
         "AI 2027": (r"\bai ?2027\b|\bia ?2027\b", "partout"),
     },
     "Sécurité et gouvernance de l'IA": {
@@ -53,10 +54,21 @@ FAMILLES = {
                               r"|appel\w* (meme )?a (un|une) (moratoire|pause)"
                               r"|\bpause (dans|du|sur) (le |la |l.)?(developpement|ia\b"
                               r"|intelligence|recherche)", "si_ia"),
+        # « Ralentir le rythme de développement »: a call to slow down without
+        # the word moratorium.
+        "ralentissement": (r"ralenti\w* (le rythme|le developpement|la course"
+                           r"|la cadence)|slow(ing)? down", "si_ia"),
+        # « Sous la supervision et le contrôle de l'homme »: the human-control
+        # theme, shared by the UN call, the SALA debates and PauseIA.
+        "contrôle humain": (r"(controle|supervision|surveillance|direction) (de l.homme"
+                            r"|humaine?)|human (oversight|control)", "si_ia"),
+        "tests avant déploiement": (r"tests? de (securite|surete) avant (le |leur )?"
+                                    r"deploiement|evaluations? independantes?", "si_ia"),
         "modèles de frontière": (r"(modeles?|ia) de frontiere|frontier (models?|ai)",
                                  "partout"),
         "risque systémique": (r"risques? systemiques?|systemic risks?", "si_ia"),
-        "instituts de sécurité": (r"\binesia\b|ai safety institute|bletchley", "partout"),
+        "instituts de sécurité": (r"\binesia\b|ai (safety|security) institute|bletchley",
+                                  "partout"),
         "armes autonomes": (r"armes? (letales? )?autonomes?|robots? tueurs?"
                             r"|killer robots?|autonomous weapons?", "partout"),
         # French typography writes pronounceable acronyms like words (« Otan »),
@@ -69,6 +81,10 @@ FAMILLES = {
         # A first name in Parliament (Claude Malhuret, Jean-Claude…): kept only
         # when no surname follows and AI is mentioned nearby.
         "Claude": (r"(?<!-)\bClaude\b(?!\s+[A-ZÉÈÀ][\w'-])", "casse_si_ia"),
+        # Model names: « Claude Mythos » slips past the rule above, built to
+        # skip « Claude Malhuret ».
+        "Claude (modèles)": (r"\bclaude (mythos|opus|sonnet|haiku|fable)\b|\bmythos\b",
+                             "si_ia"),
         "Mistral AI": (r"\bmistral (ai|ia)\b", "partout"),
         # Bare « Mistral » only, so a « Mistral AI » passage is not counted
         # twice; also a wind and a warship, hence the AI-nearby rule.
