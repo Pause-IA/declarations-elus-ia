@@ -193,18 +193,49 @@ def deconnexion():
     return redirect(url_for("connexion"))
 
 
+# Un lien vers le dépôt, glissé dans la page avant </body>.
+#
+# La page vient d'un autre dépôt et ne connaît pas le service qui l'héberge :
+# sans ça, rien n'indique où déposer les fichiers, et il faut connaître
+# l'adresse par cœur. Injecter plutôt que demander une modification de la page
+# évite d'avoir à la retoucher à chaque fois qu'elle est remplacée.
+LIEN_DEPOT = (
+    '<a href="/deposer" style="position:fixed;right:14px;bottom:14px;'
+    'z-index:9999;background:#1f4e79;color:#fff;text-decoration:none;'
+    'padding:8px 14px;border-radius:999px;font:600 14px system-ui,sans-serif;'
+    'box-shadow:0 2px 8px rgba(0,0,0,.2)">Déposer / mettre à jour</a>'
+)
+
+
+def avec_lien_depot(html):
+    """Insérer le lien juste avant </body>, ou à la fin si la balise manque."""
+    marqueur = b"</body>"
+    lien = LIEN_DEPOT.encode("utf-8")
+    if marqueur in html:
+        return html.replace(marqueur, lien + marqueur, 1)
+    return html + lien
+
+
 @app.route("/")
 @connexion_requise
 def page():
-    """La page déposée, ou celle livrée avec l'image tant qu'il n'y en a pas."""
-    depose = DONNEES / "index.html"
-    if depose.exists():
-        reponse = send_from_directory(DONNEES, "index.html")
-    elif PAGE_PAR_DEFAUT.exists():
-        reponse = send_from_directory(PAGE_PAR_DEFAUT.parent, "index.html")
-    else:
+    """La page déposée, ou celle livrée avec l'image tant qu'il n'y en a pas.
+
+    Sans données, la page d'Antoine affiche « Impossible de charger
+    synthese_elus.json (404) », ce qui ressemble à une panne alors que c'est
+    simplement un service neuf. On envoie donc vers le dépôt, où c'est écrit.
+    """
+    if not (DONNEES / "synthese_elus.json").exists():
+        flash("Aucune donnée déposée pour l'instant : la page restera vide "
+              "tant que le fichier manque. Déposez-le ici.", "error")
+        return redirect(url_for("deposer"))
+    source = DONNEES if (DONNEES / "index.html").exists() else PAGE_PAR_DEFAUT.parent
+    fichier = source / "index.html"
+    if not fichier.exists():
         return ("<h1>Veille élu·es et IA</h1><p>Aucune page déposée. "
                 "Voir <a href='/deposer'>/deposer</a>.</p>", 404)
+    reponse = app.response_class(
+        avec_lien_depot(fichier.read_bytes()), mimetype="text/html")
     reponse.headers["X-Robots-Tag"] = "noindex, nofollow"
     reponse.headers["Cache-Control"] = "no-store"
     return reponse

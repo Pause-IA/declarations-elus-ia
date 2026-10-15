@@ -77,16 +77,44 @@ class ServeurTests(unittest.TestCase):
         self.assertNotIn("exemple.test", r.headers["Location"])
 
     # --- la page par défaut ----------------------------------------------
+    def test_sans_donnees_on_est_envoye_vers_le_depot(self):
+        """Sinon la page affiche « Impossible de charger synthese_elus.json
+        (404) », ce qui ressemble à une panne alors que c'est un service neuf
+        dont personne n'a encore déposé les données."""
+        self.connecte()
+        r = self.client.get("/")
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r.headers["Location"].endswith("/deposer"))
+
     def test_sans_page_deposee_celle_du_depot_est_servie(self):
         self.connecte()
+        self.depose_formulaire("donnees", "synthese_elus.json", JSON_VALIDE)
         r = self.client.get("/")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"Veille", r.data)
 
     def test_une_page_deposee_remplace_celle_du_depot(self):
         self.connecte()
+        self.depose_formulaire("donnees", "synthese_elus.json", JSON_VALIDE)
         self.depose_formulaire("page", "index.html", b"<html>ma version</html>")
         self.assertIn(b"ma version", self.client.get("/").data)
+
+    def test_la_page_porte_un_lien_vers_le_depot(self):
+        """La page vient d'un autre dépôt et ignore où l'on dépose : sans ce
+        lien, il faut connaître l'adresse par cœur."""
+        self.connecte()
+        self.depose_formulaire("donnees", "synthese_elus.json", JSON_VALIDE)
+        self.depose_formulaire("page", "index.html",
+                               b"<html><body>page</body></html>")
+        corps = self.client.get("/").data
+        self.assertIn(b'href="/deposer"', corps)
+        self.assertLess(corps.index(b'href="/deposer"'), corps.index(b"</body>"))
+
+    def test_le_lien_est_ajoute_meme_sans_balise_body(self):
+        self.connecte()
+        self.depose_formulaire("donnees", "synthese_elus.json", JSON_VALIDE)
+        self.depose_formulaire("page", "index.html", b"<h1>sans body</h1>")
+        self.assertIn(b'href="/deposer"', self.client.get("/").data)
 
     # --- le dépôt ---------------------------------------------------------
     def test_deposer_les_donnees_les_rend_lisibles(self):
@@ -174,11 +202,12 @@ class ServeurTests(unittest.TestCase):
     def test_le_bouton_est_sur_la_page_de_depot(self):
         self.connecte()
         page = self.client.get("/deposer").data.decode()
-        self.assertIn("Recharger depuis le dépôt", page)
+        self.assertIn("Recharger la page depuis le dépôt", page)
         self.assertIn("declarations-elus-ia", page)
 
     def test_recharger_installe_la_page_du_depot(self):
         self.connecte()
+        self.depose_formulaire("donnees", "synthese_elus.json", JSON_VALIDE)
         self.module.lire_page_depot = lambda: b"<html>version du depot</html>"
         self.client.post("/recharger", follow_redirects=True)
         self.assertIn(b"version du depot", self.client.get("/").data)
@@ -193,6 +222,7 @@ class ServeurTests(unittest.TestCase):
         self.module.lire_page_depot = tombe
         r = self.client.post("/recharger", follow_redirects=True)
         self.assertIn("injoignable", r.data.decode())
+        self.depose_formulaire("donnees", "synthese_elus.json", JSON_VALIDE)
         self.assertIn(b"en service", self.client.get("/").data)
 
     def test_une_page_illisible_sur_le_depot_est_refusee(self):
@@ -201,6 +231,7 @@ class ServeurTests(unittest.TestCase):
         self.module.lire_page_depot = lambda: b""
         r = self.client.post("/recharger", follow_redirects=True)
         self.assertIn("refusée", r.data.decode())
+        self.depose_formulaire("donnees", "synthese_elus.json", JSON_VALIDE)
         self.assertIn(b"en service", self.client.get("/").data)
 
     def test_ladresse_vient_de_la_configuration_pas_de_la_requete(self):
