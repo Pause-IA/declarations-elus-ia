@@ -39,8 +39,18 @@ FAMILLES = {
     "Sécurité et gouvernance de l'IA": {
         "sécurité / sûreté de l'IA": (r"(securite|surete) (de l.|des )(ia\b|intelligences?"
                                       r" artificielles?)|ai safety", "partout"),
-        "alignement": (r"\balignement\b|\balignment\b", "si_ia"),
-        "moratoire / pause": (r"\bmoratoires?\b|\bpause\b", "si_ia"),
+        # « Alignement avec les priorités de l'État » is not AI alignment:
+        # only the phrasings that name what is being aligned.
+        "alignement": (r"alignement (des |de l.)(ia\b|intelligences? artificielles?"
+                       r"|modeles?|systemes? d.ia)|probleme d.alignement|\balignment\b",
+                       "partout"),
+        # « Des moratoires ont dû être imposés » on data centres is not a call to
+        # pause AI: a moratorium ON something, or a call FOR one.
+        "moratoire / pause": (r"moratoires? (sur|de|du|des) (l.|les )?(ia\b|intelligence"
+                              r"|developpement|recherche|modeles?)"
+                              r"|appel\w* (meme )?a (un|une) (moratoire|pause)"
+                              r"|\bpause (dans|du|sur) (le |la |l.)?(developpement|ia\b"
+                              r"|intelligence|recherche)", "si_ia"),
         "modèles de frontière": (r"(modeles?|ia) de frontiere|frontier (models?|ai)",
                                  "partout"),
         "risque systémique": (r"risques? systemiques?|systemic risks?", "si_ia"),
