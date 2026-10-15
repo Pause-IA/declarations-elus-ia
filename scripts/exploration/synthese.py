@@ -64,6 +64,8 @@ SORTIE = "synthese_elus.csv"
 SORTIE_JSON = "synthese_elus.json"
 DEJA_VUS = "deja_vus.json"  # mémoire : date de première apparition de chaque passage
 SEUIL_ALERTE = 4  # poids minimal d'un passage pour déclencher une alerte
+GROUPES_AN = "deputes_datan.csv"   # Datan (data.gouv.fr) : député·es en exercice
+GROUPES_SENAT = "senateurs.csv"    # Sénat : ODSEN_GENERAL, en ISO-8859-1
 
 
 def nettoyer_nom(nom):
@@ -112,6 +114,22 @@ def extrait(texte, familles, taille=450):
     return morceau, fusion
 
 
+def charger_groupes():
+    """{identifiant officiel: groupe} : PA… pour l'AN, matricule pour le Sénat."""
+    groupes = {}
+    if os.path.exists(GROUPES_AN):
+        with open(GROUPES_AN, encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                groupes[r["id"]] = r["groupeAbrev"]
+    if os.path.exists(GROUPES_SENAT):
+        with open(GROUPES_SENAT, encoding="iso-8859-1", newline="") as f:
+            lignes = (ligne for ligne in f if not ligne.startswith("%"))
+            for r in csv.DictReader(lignes):
+                groupes[r["Matricule"]] = r["Groupe politique"]
+    print(f"Groupes : {len(groupes)} parlementaires connus")
+    return groupes
+
+
 def lire(fichier):
     if not os.path.exists(fichier) and fichier in SECOURS:
         fichier = SECOURS[fichier]
@@ -123,6 +141,7 @@ def lire(fichier):
 
 
 def main():
+    groupes = charger_groupes()
     elus = {}
     citations = defaultdict(set)  # personnalité -> élu·es qui la citent
     aujourdhui = date.today().isoformat()
@@ -155,7 +174,9 @@ def main():
                 continue  # même passage lu deux fois
             e["passages"].add(empreinte)
             e["types"].add(type_)
-            e["groupe"] = e["groupe"] or row.get("groupe", "")
+            officiel = row.get("id_acteur") or row.get("matricule") or ""
+            if ch != "Gouvernement":  # un ministre ne siège plus dans un groupe
+                e["groupe"] = e["groupe"] or row.get("groupe", "") or groupes.get(officiel, "")
             e["dates"].append(row.get("date", ""))
             for famille, mots in familles.items():
                 e["mots"][famille].update(mots)
