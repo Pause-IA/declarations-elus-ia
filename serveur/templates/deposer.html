@@ -1,55 +1,91 @@
 {% extends "base.html" %}
-{% block titre %}Déposer · Veille élu·es et IA{% endblock %}
+{% block titre %}Mettre à jour · Veille élu·es et IA{% endblock %}
 {% block contenu %}
-<h1>Déposer la veille</h1>
-<p class="hint">
-  Les fichiers sont produits par les scripts de ce dépôt, sur votre machine.
-  Déposez-les ici : la page se consulte ensuite sur <a href="{{ url_for('page') }}">la page d'accueil</a>.
+
+<h1>Mettre à jour la veille</h1>
+<p class="intro">
+  Les données sont produites sur votre machine par les scripts du dépôt, puis
+  déposées ici. Rien d'autre à faire : pas d'accès au serveur, pas de commande.
 </p>
 
-<form method="post" enctype="multipart/form-data" class="carte">
-  <div class="champ">
-    <label for="donnees">Données — <code>synthese_elus.json</code></label>
-    <input type="file" id="donnees" name="donnees" accept=".json,application/json">
-    <p class="hint">
+<div class="carte">
+  <div class="etat">
+    <span class="pastille {{ 'ok' if etat.donnees else 'attente' }}"></span>
+    <div>
+      <h2>{% if etat.donnees %}La veille est en ligne{% else %}La veille est vide{% endif %}</h2>
       {% if etat.donnees %}
-        Dernier dépôt le {{ etat.donnees }}{% if etat.personnes %}, {{ etat.personnes }} personne(s){% endif %}.
+        <p class="hint">
+          Données déposées le {{ etat.donnees }}{% if etat.personnes %},
+          {{ etat.personnes }} personne(s){% endif %}.
+          {% if etat.page %}Page déposée le {{ etat.page }}.
+          {% else %}Page : celle livrée avec l'application.{% endif %}
+        </p>
+        <p><a href="{{ url_for('page') }}">Consulter la veille &rarr;</a></p>
       {% else %}
-        Aucun fichier déposé : la page reste vide tant qu'il manque.
+        <p class="hint">
+          Aucun fichier de données n'a encore été déposé. Déposez
+          <code>synthese_elus.json</code> ci-dessous et la page s'affichera.
+        </p>
       {% endif %}
-    </p>
+    </div>
+  </div>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="carte">
+  <div class="etape">
+    <span class="num">1</span>
+    <div class="corps">
+      <h2>Les données</h2>
+      <p class="hint">
+        Le fichier <code>synthese_elus.json</code> produit par vos scripts.
+        C'est lui qui remplit la page.
+      </p>
+      <label for="donnees">Choisir le fichier de données</label>
+      <input type="file" id="donnees" name="donnees" accept=".json,application/json">
+      <details>
+        <summary>Comment je le produis ?</summary>
+        <pre>mkdir -p donnees && cd donnees
+# téléchargements et extraction, voir le README du dépôt
+python3 ../scripts/exploration/synthese.py</pre>
+      </details>
+    </div>
   </div>
 
-  <div class="champ">
-    <label for="page">Page — <code>index.html</code></label>
-    <input type="file" id="page" name="page" accept=".html,text/html">
-    <p class="hint">
-      {% if etat.page %}
-        Dernier dépôt le {{ etat.page }}.
-      {% else %}
-        Aucune page déposée : celle livrée avec l'application est utilisée.
-      {% endif %}
-      Facultatif, seulement quand la présentation change.
-    </p>
+  <div class="etape" style="margin-top:22px">
+    <span class="num">2</span>
+    <div class="corps">
+      <h2>La page <span class="hint" style="font-weight:400">— facultatif</span></h2>
+      <p class="hint">
+        Seulement si la présentation change. Sinon laissez vide, la page
+        actuelle reste en place.
+      </p>
+      <label for="page">Choisir <code>index.html</code></label>
+      <input type="file" id="page" name="page" accept=".html,text/html">
+    </div>
   </div>
 
   <button type="submit">Déposer</button>
+  <p class="hint">
+    Un fichier illisible est refusé sans remplacer celui qui marche, et la
+    version précédente est conservée.
+  </p>
 </form>
+
+<div class="carte">
+  <h2>Vous avez poussé votre page sur GitHub ?</h2>
+  <p class="hint">
+    La page affichée est celle déposée ici, pas celle du dépôt. Ce bouton
+    réinstalle <code>page/index.html</code> tel qu'il est sur
+    <code>{{ depot }}</code>, branche <code>{{ branche }}</code>.
+  </p>
+  <form method="post" action="{{ url_for('recharger') }}">
+    <button type="submit" class="secondaire">Recharger la page depuis le dépôt</button>
+  </form>
+</div>
 
 <p class="hint">
-  Un fichier illisible est refusé sans remplacer celui qui marche, et la version
-  précédente est conservée. Les deux peuvent être déposés d'un coup.
+  Le code du service lui-même (dossier <code>serveur/</code>) n'est pas
+  concerné : s'il change, il faut un redéploiement sur le serveur.
 </p>
 
-<form method="post" action="{{ url_for('recharger') }}" class="carte">
-  <label>Recharger la page depuis le dépôt</label>
-  <p class="hint">
-    Réinstalle <code>page/index.html</code> tel qu'il est sur
-    <code>{{ depot }}</code>, branche <code>{{ branche }}</code>. À utiliser
-    quand vous avez poussé votre page sur GitHub : sans ça, c'est la dernière
-    page déposée ici qui reste affichée.
-  </p>
-  <button type="submit">Recharger depuis le dépôt</button>
-</form>
-<footer><a href="{{ url_for('deconnexion') }}">Se déconnecter</a></footer>
 {% endblock %}

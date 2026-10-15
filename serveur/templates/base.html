@@ -7,31 +7,64 @@
 <title>{% block titre %}Veille élu·es et IA{% endblock %}</title>
 <style>
   :root { --fond:#f6f5f2; --carte:#fff; --texte:#1f2328; --doux:#5f6670;
-          --bord:#dcdad5; --accent:#1f4e79; --erreur:#b42318; --ok:#1a7f37; }
+          --bord:#dcdad5; --accent:#1f4e79; --erreur:#b42318; --ok:#1a7f37;
+          --attente:#9a6700; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--fond); color:var(--texte);
-         font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  .page { max-width:640px; margin:0 auto; padding:32px 16px 48px; }
-  h1 { font-size:1.5rem; margin:0 0 4px; }
-  .hint { color:var(--doux); font-size:.9rem; }
+         font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .bandeau { background:var(--carte); border-bottom:1px solid var(--bord); }
+  .bandeau .dedans { max-width:720px; margin:0 auto; padding:12px 16px;
+         display:flex; flex-wrap:wrap; gap:8px 18px; align-items:baseline; }
+  .bandeau strong { font-size:1rem; }
+  .bandeau nav { margin-left:auto; display:flex; gap:16px; font-size:.9rem; }
+  .page { max-width:720px; margin:0 auto; padding:28px 16px 56px; }
+  h1 { font-size:1.6rem; margin:0 0 6px; }
+  h2 { font-size:1.05rem; margin:0 0 4px; }
+  .intro { color:var(--doux); margin:0 0 22px; }
+  .hint { color:var(--doux); font-size:.9rem; margin:4px 0 0; }
   .carte { background:var(--carte); border:1px solid var(--bord);
-           border-radius:10px; padding:18px; margin:16px 0; }
-  label { display:block; font-weight:600; margin-bottom:4px; }
+           border-radius:12px; padding:20px; margin-bottom:18px; }
+  .etape { display:flex; gap:14px; }
+  .num { flex:0 0 28px; height:28px; border-radius:50%; background:var(--accent);
+         color:#fff; display:grid; place-items:center; font-weight:700;
+         font-size:.85rem; }
+  .corps { flex:1; min-width:0; }
+  label { display:block; font-weight:600; margin:14px 0 6px; }
   input[type=file], input[type=password] { font:inherit; width:100%;
-           padding:8px; border:1px solid var(--bord); border-radius:6px;
-           background:#fff; }
-  .champ { margin-bottom:18px; }
-  button { font:inherit; cursor:pointer; padding:9px 18px; border-radius:7px;
-           border:1px solid var(--accent); background:var(--accent); color:#fff; }
-  .message { border-radius:8px; padding:10px 14px; margin-bottom:12px;
+           padding:10px; border:1px dashed var(--bord); border-radius:8px;
+           background:#fafaf8; }
+  input[type=password] { border-style:solid; }
+  button { font:inherit; font-weight:600; cursor:pointer; padding:11px 20px;
+           border-radius:8px; border:1px solid var(--accent);
+           background:var(--accent); color:#fff; margin-top:16px; }
+  button.secondaire { background:var(--carte); color:var(--accent); }
+  .message { border-radius:8px; padding:11px 15px; margin-bottom:14px;
              border:1px solid var(--bord); background:#fff; }
   .message.error { border-color:#f1b8b2; background:#fdf0ef; color:var(--erreur); }
   .message.success { border-color:#b7e0c0; background:#f0fbf3; color:var(--ok); }
+  .etat { display:flex; gap:10px; align-items:flex-start; }
+  .pastille { flex:0 0 10px; height:10px; border-radius:50%; margin-top:8px; }
+  .pastille.ok { background:var(--ok); }
+  .pastille.attente { background:var(--attente); }
   a { color:var(--accent); }
-  footer { margin-top:28px; font-size:.85rem; color:var(--doux); }
+  code { background:#f0efec; padding:1px 5px; border-radius:4px; font-size:.9em; }
+  pre { background:#f0efec; padding:12px; border-radius:8px; overflow-x:auto;
+        font-size:.85rem; margin:8px 0 0; }
+  details { margin-top:8px; }
+  summary { cursor:pointer; color:var(--accent); font-size:.9rem; }
 </style>
 </head>
 <body>
+{% block bandeau %}
+<header class="bandeau"><div class="dedans">
+  <strong>Veille élu·es et IA</strong>
+  <nav>
+    <a href="{{ url_for('page') }}">La veille</a>
+    <a href="{{ url_for('deposer') }}">Mettre à jour</a>
+    <a href="{{ url_for('deconnexion') }}">Se déconnecter</a>
+  </nav>
+</div></header>
+{% endblock %}
 <div class="page">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for categorie, texte in messages %}
