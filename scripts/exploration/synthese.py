@@ -39,19 +39,20 @@ POIDS_MOTS = {
     "Yann LeCun": 1,       # plutôt sceptique sur les risques
 }
 
-# Membres du gouvernement repérés dans les débats (liste à tenir à jour)
-GOUVERNEMENT = [
-    "Catherine Vautrin", "Clara Chappaz", "Amélie de Montchalin",
-    "Marc Ferracci", "Roland Lescure", "Benjamin Haddad", "David Amiel",
-    "François Bayrou", "Sébastien Martin", "Anne Le Hénanff",
-    # trouvés par le contrôle « présent·es dans plusieurs chambres »
-    "Annie Genevard", "Antoine Armand", "Catherine Chabaud", "Catherine Pégard",
-    "Édouard Geffray", "Éric Lombard", "Gérald Darmanin", "Jean-Noël Barrot",
-    "Laurent Nuñez", "Marie-Pierre Vedrenne", "Marina Ferrari", "Maud Bregeon",
-    "Nathalie Delattre", "Patrick Mignola", "Sébastien Lecornu", "Serge Papin",
-    "Sophie Primas", "Stéphanie Rist", "Valérie Létard", "Véronique Louwagie",
-    "Yannick Neuder",
-]
+
+# Repérage automatique : qualité à l'AN, type d'intervenant au Sénat
+# (1 = sénateur·ice, 2 = gouvernement, autre = invité·e extérieur·e)
+RE_GOUV = re.compile(r"ministre|secr[ée]taire d.[ée]tat|garde des sceaux"
+                     r"|porte-parole du gouvernement", re.I)
+
+
+def categorie(row, chambre):
+    if row.get("type") == "2" or RE_GOUV.search(row.get("qualite", "")):
+        return "Gouvernement"
+    if row.get("id_acteur", "").startswith("PA-") or row.get("type") not in (None, "", "1"):
+        return "Personnalités auditionnées"
+    return chambre
+
 
 SIGLE_AI = re.compile(r"(?<![\w-])AI(?![\w-])")
 CIVILITE = re.compile(r"^(m\.|mme|monsieur|madame)\s+", re.I)
@@ -91,7 +92,6 @@ def lire(fichier):
 def main():
     elus = {}
     citations = defaultdict(set)  # personnalité -> élu·es qui la citent
-    gouv = {cle(n) for n in GOUVERNEMENT}
 
     for fichier, chambre, type_ in SOURCES:
         lignes = lire(fichier)
@@ -107,10 +107,7 @@ def main():
             parle_ia, familles = analyser(SIGLE_AI.sub("artificial intelligence", texte))
             if not parle_ia and not familles:
                 continue
-
-            ch = "Gouvernement" if cle(nom) in gouv else chambre
-            if row.get("id_acteur", "").startswith("PA-"):
-                ch = "Personnalités auditionnées"  # invité·es extérieur·es de l'AN
+            ch = categorie(row, chambre)
             k = (ch, cle(nom))
             e = elus.setdefault(k, {
                 "nom": nettoyer_nom(nom), "chambre": ch, "groupe": "",
@@ -165,7 +162,7 @@ def main():
         chambres_par_nom[k].add(ch)
     doublons = [k for k, chs in chambres_par_nom.items() if len(chs) > 1]
     if doublons:
-        print("\nÀ vérifier (présent·es dans plusieurs chambres) :", ", ".join(sorted(doublons)))
+        print("\nOnt changé de rôle (élu·e ↔ gouvernement), à vérifier si doute :", ", ".join(sorted(doublons)))
     print("\nTop 40 :")
     for e in classement[:40]:
         fortes = [f"{f} : {', '.join(sorted(e['mots'][f]))}"

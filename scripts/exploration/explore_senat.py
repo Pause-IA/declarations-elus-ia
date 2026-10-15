@@ -96,6 +96,7 @@ for nom_fichier in fichiers:
         matricule = attrs.get("mat", "")
         retenus.append({"date": jour, "matricule": matricule, "orateur": orateur,
                         "qualite": qualite,
+                        "type": attrs.get("type",""),
                         "parle_ia": "oui" if parle_ia else "non",
                         "mots_cles": decrire(familles), "texte": brut,
                         "fichier": nom_fichier})

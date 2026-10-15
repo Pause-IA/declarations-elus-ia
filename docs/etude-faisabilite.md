@@ -110,10 +110,13 @@ plus pertinent et lien.
   mots-clés s'applique à toutes les sources sans relancer chaque script.
 - Regroupement par chambre et par nom normalisé (sans accents, casse ni
   civilité).
-- **Gouvernement** : liste faite à la main, complétée grâce à un contrôle qui
-  signale les noms présents dans plusieurs chambres.
-- **Personnalités auditionnées** : à l'AN, les intervenant·es extérieur·es ont un
-  identifiant avec tiret (`PA-125909`) ; ils sont rangés à part.
+- **Gouvernement** : repéré automatiquement, par la qualité de l'orateur à l'AN
+  (« ministre », « garde des sceaux »…) et par l'attribut `type="2"` au Sénat.
+  Chaque intervention est classée selon le rôle tenu ce jour-là : un·e
+  parlementaire devenu·e ministre a deux lignes.
+- **Personnalités auditionnées** : invité·es extérieur·es, repéré·es par leur
+  identifiant avec tiret à l'AN (`PA-125909`) et par un type d'intervenant
+  autre que 1 ou 2 au Sénat ; ils sont rangés à part.
 - Garde-fou : un « nom » de plus de 60 caractères est signalé et écarté.
 
 ### Score
@@ -132,14 +135,11 @@ passage sur l'IA (plafonné à 10).
 Ajustements : « contrôle humain » 2, Sam Altman 2, Arthur Mensch 1, Yann LeCun 1.
 Ces poids sont à valider avec l'équipe plaidoyer.
 
-Première version (15/10/2026) : 539 personnes, dont 280 député·es,
-177 sénateur·ices, 47 eurodéputé·es, 31 membres du gouvernement et
-4 personnalités auditionnées.
+Version du 15/10/2026 : 548 personnes, dont 278 député·es, 170 sénateur·ices,
+47 eurodéputé·es, 49 membres du gouvernement et 4 personnalités auditionnées.
 
 ### Limites et suite
 
-- La liste du gouvernement est manuelle : il faudrait que les scripts de séance
-  gardent la qualité de l'orateur (« ministre de… »).
 - Questions du Sénat : un an d'historique seulement.
 - Questions du PE : titres seulement, et rien depuis mi-juillet 2026.
 - Le tri par mots-clés reste un premier filtre : une seconde passe par LLM

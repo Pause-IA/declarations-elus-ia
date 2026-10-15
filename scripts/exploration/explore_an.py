@@ -50,7 +50,9 @@ for f in sorted(glob.glob("an/xml/compteRendu/*.xml")):
             continue
         nb_ia += parle_ia
         acteur = p.get("id_acteur", "")
+        qualite = p.findtext("a:orateurs/a:orateur/a:qualite", default="", namespaces=ns)
         retenus.append({"date": jour, "id_acteur": acteur, "orateur": nom,
+                        "qualite": qualite,
                         "parle_ia": "oui" if parle_ia else "non",
                         "mots_cles": decrire(familles), "texte": brut,
                         "id_syceron": p.get("id_syceron"),
