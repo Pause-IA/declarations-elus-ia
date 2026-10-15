@@ -11,8 +11,9 @@ from motscles import analyser, decrire
 
 # « Mme Olivia Grégoire interroge M. le ministre… »: the file carries only the
 # author's id, but every question opens with their name.
-AUTEUR = re.compile(r"^(M\.|Mme)\s+(.+?)\s+(interroge|attire|appelle|alerte"
-                    r"|souhaite|demande|sollicite)")
+AUTEUR = re.compile(r"^(M\.|Mme)\s+(.+?)\s+(interroge|interpelle|attire|appelle"
+                    r"|alerte|expose|questionne|souhaite|demande|sollicite"
+                    r"|signale|rappelle)")
 
 
 def premier(x):
