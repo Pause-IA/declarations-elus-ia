@@ -86,6 +86,22 @@ Puis, sur le serveur :
 
     sudo docker compose up -d --build
 
+Le proxy inverse est **Caddy**, pas Traefik. Il faut lui déclarer le domaine,
+dans `/opt/volunteer-apps/caddy/Caddyfile`, sur le modèle des autres sites :
+
+    veille.pauseia.fr {
+        reverse_proxy veille-elus-ia:8000
+    }
+
+puis recharger sans couper les autres sites :
+
+    sudo docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+Sans cette entrée, le conteneur tourne, répond sur le réseau interne, et le
+domaine échoue en « tlsv1 alert internal error » : Caddy reçoit une demande
+pour un nom qu'il ne connaît pas et ne peut présenter aucun certificat. Le
+symptôme ne ressemble pas à sa cause, d'où cette note.
+
 Les fichiers déposés vivent dans `/opt/volunteer-apps/data/veille-elus`, hors
 de l'image : ils survivent aux reconstructions. La page livrée avec l'image
 sert tant que personne n'en a déposé une autre, donc un déploiement neuf

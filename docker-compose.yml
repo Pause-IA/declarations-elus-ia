@@ -16,15 +16,10 @@ services:
     volumes:
       - /opt/volunteer-apps/data/veille-elus:/data
 
+    # Le réseau que partage le proxy inverse. Le service n'expose aucun port
+    # sur l'hôte : seul Caddy l'atteint, par son nom de conteneur.
     networks:
       - web
-
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.veille-elus.rule=Host(`veille.pauseia.fr`)"
-      - "traefik.http.routers.veille-elus.entrypoints=websecure"
-      - "traefik.http.routers.veille-elus.tls.certresolver=lets-encrypt"
-      - "traefik.http.services.veille-elus.loadbalancer.server.port=8000"
 
 networks:
   web:
