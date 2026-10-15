@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Données téléchargées et résultats générés
+donnees/
+*.zip
+*.csv
+synthese_elus.json
+deja_vus.json

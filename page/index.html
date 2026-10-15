@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Veille élu·es et IA</title>
+<style>
+  :root {
+    --fond: #f6f5f2; --carte: #ffffff; --texte: #1f2328; --doux: #5f6670;
+    --bord: #dcdad5; --accent: #1f4e79;
+    --risques: #b42318; --orgas: #c4570c; --gouv: #8a6d00;
+    --perso: #1d5fa8; --entreprises: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .page { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  .sous-titre { color: var(--doux); margin: 0 0 16px; }
+  .alerte { background: #fff8e6; border: 1px solid #f0d58c; border-radius: 8px;
+            padding: 10px 14px; margin-bottom: 20px; font-size: .93rem; }
+
+  .alertes { background: #fdf0ef; border: 1px solid #f1b8b2; border-radius: 10px;
+             padding: 12px 14px; margin-bottom: 20px; }
+  .alertes h2 { font-size: 1.05rem; margin: 0 0 4px; }
+  .alertes .note { color: var(--doux); font-size: .82rem; margin: 0 0 8px; }
+  .alertes ul { list-style: none; margin: 0; padding: 0; }
+  .alertes li { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px;
+                align-items: center; padding: 8px 0; border-top: 1px solid #f1d3cf; }
+  .alertes li .mots { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .alertes button { font: inherit; font-size: .82rem; cursor: pointer; padding: 4px 10px;
+                    border-radius: 6px; border: 1px solid var(--bord); background: #fff; }
+  .alertes button.traiter { border-color: var(--accent); color: var(--accent); }
+  .alertes.calme { background: var(--carte); border-color: var(--bord); }
+  .nouveau { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+             color: #fff; background: var(--risques); border-radius: 4px; padding: 1px 6px;
+             margin-left: 6px; vertical-align: 2px; }
+
+  .filtres { display: grid; gap: 12px; grid-template-columns: minmax(0,2fr) repeat(3, minmax(0,1fr));
+             background: var(--carte); border: 1px solid var(--bord);
+             border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .filtres label { display: flex; flex-direction: column; gap: 4px;
+                   font-size: .8rem; color: var(--doux); font-weight: 600; }
+  .filtres input, .filtres select { font: inherit; padding: 7px 9px; color: var(--texte);
+                   border: 1px solid var(--bord); border-radius: 6px; background: #fff;
+                   width: 100%; min-width: 0; }
+  .profils { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .profils button { font: inherit; font-size: .88rem; cursor: pointer; padding: 6px 12px;
+                    border-radius: 999px; border: 1px solid var(--bord); background: var(--carte); }
+  .profils button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .compte { color: var(--doux); font-size: .9rem; margin: 0 0 10px; }
+
+  .personne { background: var(--carte); border: 1px solid var(--bord);
+              border-radius: 10px; margin-bottom: 8px; }
+  .personne summary { list-style: none; cursor: pointer; padding: 12px 14px;
+                      display: grid; gap: 6px 14px; align-items: center;
+                      grid-template-columns: 64px 1fr auto; }
+  .personne summary::-webkit-details-marker { display: none; }
+  .personne[open] summary { border-bottom: 1px solid var(--bord); }
+  .score b { font-size: 1.25rem; display: block; line-height: 1.1; }
+  .barre { display: block; height: 5px; background: #ecebe7; border-radius: 3px; margin-top: 4px; }
+  .barre i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+  .nom { font-weight: 650; }
+  .meta, .stats { color: var(--doux); font-size: .85rem; }
+  .stats { text-align: right; white-space: nowrap; }
+  .badges { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 6px; }
+  .badge { font-size: .78rem; padding: 2px 8px; border-radius: 999px;
+           border: 1px solid var(--c); color: var(--c); background: #fff; }
+
+  .passages { padding: 6px 14px 14px; }
+  .passage { border-left: 3px solid var(--c, var(--bord)); padding: 6px 0 6px 12px; margin-top: 10px; }
+  .passage header { font-size: .82rem; color: var(--doux); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .passage p { margin: 4px 0; }
+  .passage mark { background: #fdeeb5; color: inherit; font-weight: 650; padding: 0 2px; border-radius: 3px; }
+  .passage a { font-size: .85rem; color: var(--accent); }
+  .vide { color: var(--doux); padding: 24px; text-align: center; }
+
+  footer { margin-top: 28px; color: var(--doux); font-size: .88rem; }
+  footer table { border-collapse: collapse; margin: 6px 0 10px; }
+  footer td { padding: 2px 14px 2px 0; }
+
+  @media (max-width: 760px) {
+    .filtres { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .filtres label:first-child { grid-column: 1 / 3; }
+    .personne summary { grid-template-columns: 52px 1fr; }
+    .stats { grid-column: 2; text-align: left; }
+    .badges { grid-column: 1 / 3; }
+    .alertes li { grid-template-columns: auto auto 1fr; }
+    .alertes li .nom { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Veille élu·es et IA</h1>
+  <p class="sous-titre" id="sous-titre">Chargement…</p>
+  <p class="alerte">Repérage automatique par mots-clés : <strong>lisez l'extrait avant de contacter quelqu'un.</strong>
+    Document interne à PauseIA, à ne pas diffuser.</p>
+
+  <section class="alertes" id="alertes" aria-live="polite"></section>
+
+  <div class="filtres">
+    <label>Rechercher un nom
+      <input id="recherche" type="search" placeholder="ex. Basquin">
+    </label>
+    <label>Chambre
+      <select id="chambre">
+        <option value="elus">Élu·es (AN, Sénat, PE)</option>
+        <option value="Assemblée nationale">Assemblée nationale</option>
+        <option value="Sénat">Sénat</option>
+        <option value="Parlement européen">Parlement européen</option>
+        <option value="Gouvernement">Gouvernement</option>
+        <option value="Personnalités auditionnées">Personnalités auditionnées</option>
+        <option value="tous">Tout le monde</option>
+      </select>
+    </label>
+    <label>Source
+      <select id="source">
+        <option value="tous">Séances et questions</option>
+        <option value="séance">Séances</option>
+        <option value="question écrite">Questions écrites</option>
+      </select>
+    </label>
+    <label>Trier par
+      <select id="tri">
+        <option value="score">Score</option>
+        <option value="recent">Intervention la plus récente</option>
+        <option value="passages">Nombre de passages</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="profils" id="profils" role="group" aria-label="Profil recherché"></div>
+  <p class="compte" id="compte"></p>
+  <div id="liste"></div>
+
+  <footer id="legende"></footer>
+</div>
+
+<script>
+// Famille de mots-clés -> libellé court et couleur (variables CSS ci-dessus)
+const FAMILLES = {
+  "Risques extrêmes": { court: "Risques extrêmes", couleur: "var(--risques)" },
+  "Organisations de la sécurité de l'IA": { court: "Organisations", couleur: "var(--orgas)" },
+  "Sécurité et gouvernance de l'IA": { court: "Sécurité et gouvernance", couleur: "var(--gouv)" },
+  "Personnalités": { court: "Personnalités", couleur: "var(--perso)" },
+  "Entreprises et produits": { court: "Entreprises", couleur: "var(--entreprises)" },
+};
+const ELUS = ["Assemblée nationale", "Sénat", "Parlement européen"];
+const FENETRE_JOURS = 14;  // un passage reste « nouveau » pendant 14 jours
+let donnees = null;
+let profil = "tous";
+let limiteNouveau = "";    // date (AAAA-MM-JJ) à partir de laquelle c'est nouveau
+
+// Suivi « traité » : enregistré dans ce navigateur uniquement
+function cleP(p) { return p.chambre + "|" + p.nom; }
+function lireTraites() {
+  try { return JSON.parse(localStorage.getItem("veille-traites")) || {}; } catch { return {}; }
+}
+function ecrireTraites(t) {
+  try { localStorage.setItem("veille-traites", JSON.stringify(t)); } catch { /* navigateur privé */ }
+}
+function passageNouveau(pa) {
+  return pa.vu_le && pa.vu_le >= limiteNouveau && pa.poids >= donnees.seuil_alerte;
+}
+function aTraiter(p) {
+  return p.nouveau_le && p.nouveau_le >= limiteNouveau
+    && (lireTraites()[cleP(p)] || "") < p.nouveau_le;
+}
+
+// Échappe le texte avant de l'insérer dans la page (évite d'interpréter du HTML)
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+// « Hénanff » et « henanff » doivent se trouver pareil
+function sansAccents(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+// Met en gras les zones [début, fin] calculées par synthese.py, en échappant le reste
+function surligner(texte, marques) {
+  let html = "", pos = 0;
+  for (const [debut, fin] of marques || []) {
+    html += esc(texte.slice(pos, debut)) + "<mark>" + esc(texte.slice(debut, fin)) + "</mark>";
+    pos = fin;
+  }
+  return html + esc(texte.slice(pos));
+}
+function dateFr(d) {
+  return d ? d.split("-").reverse().join("/") : "";
+}
+function badges(mots) {
+  return Object.entries(mots).map(([famille, liste]) => {
+    const f = FAMILLES[famille] || { court: famille, couleur: "var(--doux)" };
+    return `<span class="badge" style="--c:${f.couleur}">${esc(f.court)} : ${esc(liste.join(", "))}</span>`;
+  }).join("");
+}
+
+function filtrer() {
+  const q = sansAccents(document.getElementById("recherche").value.trim());
+  const chambre = document.getElementById("chambre").value;
+  const source = document.getElementById("source").value;
+  const tri = document.getElementById("tri").value;
+
+  let res = donnees.personnes.filter(p =>
+    (!q || sansAccents(p.nom).includes(q)) &&
+    (chambre === "tous" || (chambre === "elus" ? ELUS.includes(p.chambre) : p.chambre === chambre)) &&
+    (source === "tous" || p.types.includes(source)) &&
+    (profil === "tous" || p.mots[profil])
+  );
+  if (tri === "recent") res.sort((a, b) => b.derniere_date.localeCompare(a.derniere_date));
+  if (tri === "passages") res.sort((a, b) => b.nb_passages - a.nb_passages);
+  // tri par score : déjà l'ordre du fichier
+  afficher(res);
+}
+
+function afficher(res) {
+  const max = Math.max(1, ...donnees.personnes.map(p => p.score));
+  document.getElementById("compte").textContent =
+    `${res.length} personne${res.length > 1 ? "s" : ""}`;
+  const liste = document.getElementById("liste");
+  if (!res.length) {
+    liste.innerHTML = `<p class="vide">Aucun résultat avec ces filtres.</p>`;
+    return;
+  }
+  liste.innerHTML = res.map(p => `
+    <details class="personne" data-nom="${esc(p.nom)}" data-chambre="${esc(p.chambre)}">
+      <summary>
+        <span class="score"><b>${p.score}</b>
+          <span class="barre"><i style="width:${Math.round(100 * p.score / max)}%"></i></span></span>
+        <span><span class="nom">${esc(p.nom)}</span>${aTraiter(p) ? `<span class="nouveau">Nouveau</span>` : ""}<br>
+          <span class="meta">${esc(p.chambre)}${p.groupe ? " · " + esc(p.groupe) : ""}</span></span>
+        <span class="stats">${p.nb_passages} passage${p.nb_passages > 1 ? "s" : ""}<br>
+          dernier : ${dateFr(p.derniere_date)}</span>
+        <span class="badges">${badges(p.mots)}</span>
+      </summary>
+      <div class="passages"></div>
+    </details>`).join("");
+}
+
+// Les passages ne sont construits qu'à l'ouverture d'une fiche (page plus légère)
+document.getElementById("liste").addEventListener("toggle", ev => {
+  const fiche = ev.target;
+  if (!fiche.open || fiche.dataset.rempli) return;
+  const p = donnees.personnes.find(x => x.nom === fiche.dataset.nom && x.chambre === fiche.dataset.chambre);
+  fiche.querySelector(".passages").innerHTML = p.passages.map(pa => {
+    const forte = Object.keys(pa.mots)[0];
+    const couleur = forte ? (FAMILLES[forte]?.couleur || "var(--bord)") : "var(--bord)";
+    return `<article class="passage" style="--c:${couleur}">
+      <header>${dateFr(pa.date)} · ${esc(pa.type)} ${badges(pa.mots)}${passageNouveau(pa) ? `<span class="nouveau">Nouveau</span>` : ""}</header>
+      <p>${surligner(pa.extrait, pa.marques)}</p>
+      ${pa.lien ? `<a href="${esc(pa.lien)}" target="_blank" rel="noopener">Voir la source</a>` : ""}
+    </article>`;
+  }).join("");
+  fiche.dataset.rempli = "1";
+}, true);
+
+// Bandeau des nouveautés à traiter
+function afficherAlertes() {
+  const zone = document.getElementById("alertes");
+  const liste = donnees.personnes.filter(aTraiter);
+  zone.classList.toggle("calme", !liste.length);
+  if (!liste.length) {
+    zone.innerHTML = `<h2>Aucune nouvelle alerte à traiter</h2>
+      <p class="note">Les passages importants repérés depuis moins de ${FENETRE_JOURS} jours apparaîtront ici.</p>`;
+    return;
+  }
+  zone.innerHTML = `
+    <h2>🔔 ${liste.length} nouvelle${liste.length > 1 ? "s" : ""} alerte${liste.length > 1 ? "s" : ""} à traiter</h2>
+    <p class="note">Passages importants repérés depuis moins de ${FENETRE_JOURS} jours.
+      « Traité » est enregistré dans ce navigateur seulement.</p>
+    <ul>${liste.map(p => {
+      const mots = {};
+      p.passages.filter(passageNouveau).forEach(pa =>
+        Object.entries(pa.mots)
+          .filter(([f]) => (donnees.poids[f] || 0) >= donnees.seuil_alerte)
+          .forEach(([f, l]) => (mots[f] = [...new Set([...(mots[f] || []), ...l])])));
+      return `<li data-cle="${esc(cleP(p))}">
+        <span class="nom"><strong>${esc(p.nom)}</strong> · ${esc(p.chambre)}</span>
+        <button type="button" class="voir">Voir</button>
+        <button type="button" class="traiter">Marquer comme traité</button>
+        <span class="mots">${badges(mots)}</span>
+      </li>`;
+    }).join("")}</ul>`;
+}
+
+document.getElementById("alertes").addEventListener("click", ev => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  const p = donnees.personnes.find(x => cleP(x) === b.closest("li").dataset.cle);
+  if (b.classList.contains("traiter")) {
+    const t = lireTraites();
+    t[cleP(p)] = p.nouveau_le;
+    ecrireTraites(t);
+    afficherAlertes();
+    filtrer();
+  } else {
+    // « Voir » : on isole la personne dans la liste et on ouvre sa fiche
+    document.getElementById("recherche").value = p.nom;
+    document.getElementById("chambre").value = "tous";
+    document.getElementById("source").value = "tous";
+    profil = "tous";
+    document.querySelectorAll("#profils button").forEach(x =>
+      x.setAttribute("aria-pressed", x.dataset.profil === "tous"));
+    filtrer();
+    const fiche = [...document.querySelectorAll(".personne")].find(f => f.dataset.chambre === p.chambre);
+    if (fiche) { fiche.open = true; fiche.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }
+});
+
+function initialiser() {
+  const d = new Date(donnees.genere_le + "T12:00:00");
+  d.setDate(d.getDate() - FENETRE_JOURS);
+  limiteNouveau = d.toISOString().slice(0, 10);
+  afficherAlertes();
+
+  document.getElementById("sous-titre").textContent =
+    `Mise à jour du ${dateFr(donnees.genere_le)} · ${donnees.personnes.length} personnes · Assemblée nationale, Sénat, Parlement européen`;
+
+  const boutons = [["tous", "Tous les profils"], ...Object.keys(FAMILLES).map(f => [f, FAMILLES[f].court])];
+  const zone = document.getElementById("profils");
+  zone.innerHTML = boutons.map(([v, t]) =>
+    `<button type="button" data-profil="${esc(v)}" aria-pressed="${v === profil}">${esc(t)}</button>`).join("");
+  zone.addEventListener("click", ev => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    profil = b.dataset.profil;
+    zone.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    filtrer();
+  });
+  ["recherche", "chambre", "source", "tri"].forEach(id =>
+    document.getElementById(id).addEventListener("input", filtrer));
+
+  const lignes = Object.entries(donnees.poids).map(([f, pts]) =>
+    `<tr><td>${esc(FAMILLES[f]?.court || f)}</td><td><strong>${pts}</strong> points</td></tr>`).join("");
+  const ajust = Object.entries(donnees.poids_mots).map(([m, pts]) => `${esc(m)} (${pts})`).join(", ");
+  document.getElementById("legende").innerHTML = `
+    <strong>Comment lire le score ?</strong>
+    Chaque passage rapporte les points de son mot-clé le plus fort, plus 1 point par passage sur l'IA (10 au maximum).
+    <table>${lignes}</table>
+    Mots comptés moins que leur famille : ${ajust}.`;
+  filtrer();
+}
+
+fetch("synthese_elus.json")
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(d => { donnees = d; initialiser(); })
+  .catch(err => {
+    document.getElementById("sous-titre").textContent =
+      "Impossible de charger synthese_elus.json (" + err.message + "). " +
+      "Ouvrez la page via un serveur web, pas en double-cliquant sur le fichier.";
+  });
+</script>
+</body>
+</html>
