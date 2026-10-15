@@ -11,7 +11,7 @@ import hashlib
 from datetime import date
 from collections import defaultdict
 
-from motscles import IA, analyser, norm, position
+from motscles import IA, analyser, norm, position, occurrences, sans_titre
 
 # (fichier, chambre, type) ; les fichiers absents sont simplement ignorés
 SOURCES = [
@@ -78,7 +78,7 @@ def cle(nom):
 
 
 def extrait(texte, familles, taille=450):
-    """Morceau du texte centré sur le mot-clé le plus fort (sinon sur l'IA)."""
+    """(morceau centré sur le mot-clé le plus fort, [[début, fin] à mettre en gras])."""
     debut = None
     candidats = sorted(((POIDS_MOTS.get(m, POIDS.get(f, 0)), f, m)
                         for f, mots in familles.items() for m in mots), reverse=True)
@@ -87,11 +87,29 @@ def extrait(texte, familles, taille=450):
         if debut is not None:
             break
     if debut is None:
-        m = re.search(IA, norm(texte))
+        m = re.search(IA, sans_titre(norm(texte)))
         debut = m.start() if m else 0
     debut = max(0, debut - 200)
-    morceau = texte[debut:debut + taille].strip()
-    return ("…" if debut else "") + morceau + ("…" if debut + taille < len(texte) else "")
+    fin = min(len(texte), debut + taille)
+    prefixe = "…" if debut else ""
+    morceau = prefixe + texte[debut:fin] + ("…" if fin < len(texte) else "")
+
+    # Positions des mots-clés, ramenées au début du morceau
+    decalage = debut - len(prefixe)
+    marques = []
+    for f, mots in familles.items():
+        for mot in mots:
+            for d, e in occurrences(texte, f, mot):
+                if d >= debut and e <= fin:
+                    marques.append([d - decalage, e - decalage])
+    marques.sort()
+    fusion = []
+    for d, e in marques:  # deux mots-clés qui se chevauchent : une seule zone
+        if fusion and d <= fusion[-1][1]:
+            fusion[-1][1] = max(fusion[-1][1], e)
+        else:
+            fusion.append([d, e])
+    return morceau, fusion
 
 
 def lire(fichier):
@@ -147,7 +165,8 @@ def main():
             poids = max((POIDS_MOTS.get(mot, POIDS.get(f, 0))
                          for f, mots in familles.items() for mot in mots), default=0)
             e["score"] += poids
-            candidat = (poids, row.get("date", ""), extrait(texte, familles), row.get("url", ""))
+            morceau, marques = extrait(texte, familles)
+            candidat = (poids, row.get("date", ""), morceau, row.get("url", ""))
             if candidat[:2] > e["meilleur"][:2]:
                 e["meilleur"] = candidat
             identifiant = hashlib.sha1(f"{k}|{empreinte}".encode()).hexdigest()[:16]
@@ -155,7 +174,7 @@ def main():
             e["liste"].append({
                 "date": row.get("date", ""), "type": type_, "poids": poids,
                 "mots": {f: sorted(m) for f, m in familles.items()},
-                "extrait": extrait(texte, familles), "lien": row.get("url", ""),
+                "extrait": morceau, "marques": marques, "lien": row.get("url", ""),
                 "vu_le": vu_le,
             })
 

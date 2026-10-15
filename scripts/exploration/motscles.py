@@ -19,6 +19,15 @@ IA = r"intelligences? artificielles?|\bia\b(?!-ipr)|artificial intelligence"
 # would tie public finances on page one to AI on page three.
 FENETRE = 300
 
+# The minister's title (« chargée de l'intelligence artificielle et du numérique »)
+# is not a statement about AI: every digital question is addressed to her.
+TITRE = r"charge(e)? de (l.intelligence artificielle|l.ia) et du numerique"
+
+
+def sans_titre(n):
+    """Efface le titre du ministre d'un texte normalisé, en gardant sa longueur."""
+    return re.sub(TITRE, lambda m: " " * len(m.group()), n)
+
 FAMILLES = {
     "Risques extrêmes": {
         "superintelligence": (r"super[- ]?intelligen", "partout"),
@@ -141,7 +150,7 @@ def norm(s):
 
 def ia_proche(texte, debut, fin):
     zone = texte[max(0, debut - FENETRE):fin + FENETRE]
-    return re.search(IA, norm(zone)) is not None
+    return re.search(IA, sans_titre(norm(zone))) is not None
 
 
 def trouver(brut, rx, mode, n=None):
@@ -156,7 +165,7 @@ def trouver(brut, rx, mode, n=None):
 
 def analyser(brut):
     """(parle_ia, {famille: [mots-clés trouvés]}) pour un passage."""
-    n = norm(brut)
+    n = sans_titre(norm(brut))
     familles = {}
     for famille, mots in FAMILLES.items():
         for mot, (rx, mode) in mots.items():
@@ -169,6 +178,14 @@ def position(brut, famille, mot):
     """Où se trouve ce mot-clé dans le passage (None s'il n'y est pas)."""
     rx, mode = FAMILLES[famille][mot]
     return trouver(brut, rx, mode)
+
+
+def occurrences(brut, famille, mot):
+    """Toutes les occurrences valables du mot-clé : [(début, fin), …]."""
+    rx, mode = FAMILLES[famille][mot]
+    texte = brut if mode.startswith("casse") else norm(brut)
+    return [(m.start(), m.end()) for m in re.finditer(rx, texte)
+            if not mode.endswith("si_ia") or ia_proche(texte, m.start(), m.end())]
 
 
 def decrire(familles):

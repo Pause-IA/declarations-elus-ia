@@ -72,6 +72,7 @@
   .passage { border-left: 3px solid var(--c, var(--bord)); padding: 6px 0 6px 12px; margin-top: 10px; }
   .passage header { font-size: .82rem; color: var(--doux); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .passage p { margin: 4px 0; }
+  .passage mark { background: #fdeeb5; color: inherit; font-weight: 650; padding: 0 2px; border-radius: 3px; }
   .passage a { font-size: .85rem; color: var(--accent); }
   .vide { color: var(--doux); padding: 24px; text-align: center; }
 
@@ -177,6 +178,15 @@ function esc(s) {
 function sansAccents(s) {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
+// Met en gras les zones [début, fin] calculées par synthese.py, en échappant le reste
+function surligner(texte, marques) {
+  let html = "", pos = 0;
+  for (const [debut, fin] of marques || []) {
+    html += esc(texte.slice(pos, debut)) + "<mark>" + esc(texte.slice(debut, fin)) + "</mark>";
+    pos = fin;
+  }
+  return html + esc(texte.slice(pos));
+}
 function dateFr(d) {
   return d ? d.split("-").reverse().join("/") : "";
 }
@@ -239,7 +249,7 @@ document.getElementById("liste").addEventListener("toggle", ev => {
     const couleur = forte ? (FAMILLES[forte]?.couleur || "var(--bord)") : "var(--bord)";
     return `<article class="passage" style="--c:${couleur}">
       <header>${dateFr(pa.date)} · ${esc(pa.type)} ${badges(pa.mots)}${passageNouveau(pa) ? `<span class="nouveau">Nouveau</span>` : ""}</header>
-      <p>${esc(pa.extrait)}</p>
+      <p>${surligner(pa.extrait, pa.marques)}</p>
       ${pa.lien ? `<a href="${esc(pa.lien)}" target="_blank" rel="noopener">Voir la source</a>` : ""}
     </article>`;
   }).join("");
