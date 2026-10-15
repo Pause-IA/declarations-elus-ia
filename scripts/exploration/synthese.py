@@ -11,7 +11,7 @@ import hashlib
 from datetime import date
 from collections import defaultdict
 
-from motscles import IA, analyser, norm
+from motscles import IA, analyser, norm, position
 
 # (fichier, chambre, type) ; les fichiers absents sont simplement ignorés
 SOURCES = [
@@ -60,7 +60,6 @@ def categorie(row, chambre):
 SIGLE_AI = re.compile(r"(?<![\w-])AI(?![\w-])")
 CIVILITE = re.compile(r"^(m\.|mme|monsieur|madame)\s+", re.I)
 PARENTHESE = re.compile(r"\s*\(.*?\)\s*$")
-RE_IA = re.compile(IA, re.I)
 SORTIE = "synthese_elus.csv"
 SORTIE_JSON = "synthese_elus.json"
 DEJA_VUS = "deja_vus.json"  # mémoire : date de première apparition de chaque passage
@@ -78,9 +77,19 @@ def cle(nom):
     return re.sub(r"[\s-]+", " ", norm(nettoyer_nom(nom))).strip()
 
 
-def extrait(texte, taille=450):
-    m = RE_IA.search(texte)
-    debut = max(0, m.start() - 200) if m else 0
+def extrait(texte, familles, taille=450):
+    """Morceau du texte centré sur le mot-clé le plus fort (sinon sur l'IA)."""
+    debut = None
+    candidats = sorted(((POIDS_MOTS.get(m, POIDS.get(f, 0)), f, m)
+                        for f, mots in familles.items() for m in mots), reverse=True)
+    for _, f, m in candidats:
+        debut = position(texte, f, m)
+        if debut is not None:
+            break
+    if debut is None:
+        m = re.search(IA, norm(texte))
+        debut = m.start() if m else 0
+    debut = max(0, debut - 200)
     morceau = texte[debut:debut + taille].strip()
     return ("…" if debut else "") + morceau + ("…" if debut + taille < len(texte) else "")
 
@@ -138,7 +147,7 @@ def main():
             poids = max((POIDS_MOTS.get(mot, POIDS.get(f, 0))
                          for f, mots in familles.items() for mot in mots), default=0)
             e["score"] += poids
-            candidat = (poids, row.get("date", ""), extrait(texte), row.get("url", ""))
+            candidat = (poids, row.get("date", ""), extrait(texte, familles), row.get("url", ""))
             if candidat[:2] > e["meilleur"][:2]:
                 e["meilleur"] = candidat
             identifiant = hashlib.sha1(f"{k}|{empreinte}".encode()).hexdigest()[:16]
@@ -146,7 +155,7 @@ def main():
             e["liste"].append({
                 "date": row.get("date", ""), "type": type_, "poids": poids,
                 "mots": {f: sorted(m) for f, m in familles.items()},
-                "extrait": extrait(texte), "lien": row.get("url", ""),
+                "extrait": extrait(texte, familles), "lien": row.get("url", ""),
                 "vu_le": vu_le,
             })
 

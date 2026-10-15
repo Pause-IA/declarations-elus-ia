@@ -121,15 +121,37 @@ FAMILLES = {
 }
 
 
+class _Simplifie(dict):
+    """Table pour str.translate : chaque caractère devient UN caractère ASCII
+    minuscule (« É » -> « e », « ’ » ou « œ » -> espace), calculé à la demande."""
+    def __missing__(self, code):
+        simple = unicodedata.normalize("NFKD", chr(code)).encode("ascii", "ignore").decode()
+        self[code] = (simple[:1] or " ").lower()
+        return self[code]
+
+
+_TABLE = _Simplifie()
+
+
 def norm(s):
-    """Lowercase, accents stripped: « Contrôle » and « controle » match alike."""
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
-    return s.lower()
+    """Minuscules sans accents, MÊME LONGUEUR que le texte d'origine :
+    une position trouvée dans norm(s) vaut aussi dans s."""
+    return s.translate(_TABLE)
 
 
 def ia_proche(texte, debut, fin):
     zone = texte[max(0, debut - FENETRE):fin + FENETRE]
     return re.search(IA, norm(zone)) is not None
+
+
+def trouver(brut, rx, mode, n=None):
+    """Position de la première occurrence valable du mot-clé, ou None."""
+    texte = brut if mode.startswith("casse") else (n if n is not None else norm(brut))
+    for m in re.finditer(rx, texte):
+        if mode.endswith("si_ia") and not ia_proche(texte, m.start(), m.end()):
+            continue
+        return m.start()
+    return None
 
 
 def analyser(brut):
@@ -138,13 +160,15 @@ def analyser(brut):
     familles = {}
     for famille, mots in FAMILLES.items():
         for mot, (rx, mode) in mots.items():
-            texte = brut if mode.startswith("casse") else n
-            for m in re.finditer(rx, texte):
-                if mode.endswith("si_ia") and not ia_proche(texte, m.start(), m.end()):
-                    continue
+            if trouver(brut, rx, mode, n) is not None:
                 familles.setdefault(famille, []).append(mot)
-                break   # one hit is enough for this keyword
     return bool(re.search(IA, n)), familles
+
+
+def position(brut, famille, mot):
+    """Où se trouve ce mot-clé dans le passage (None s'il n'y est pas)."""
+    rx, mode = FAMILLES[famille][mot]
+    return trouver(brut, rx, mode)
 
 
 def decrire(familles):
