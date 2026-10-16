@@ -7,6 +7,7 @@ import csv
 import os
 import re
 import json
+import sys
 import hashlib
 from datetime import date
 from collections import defaultdict
@@ -21,6 +22,7 @@ SOURCES = [
     ("passages_senat_questions_complet.csv", "Sénat", "question écrite"),
     ("passages_pe.csv", "Parlement européen", "séance"),
     ("passages_pe_questions.csv", "Parlement européen", "question écrite"),
+    ("passages_pe_questions_recentes.csv", "Parlement européen", "question écrite"),
 ]
 SECOURS = {"passages_senat_questions_complet.csv": "passages_senat_questions.csv"}
 
@@ -198,7 +200,10 @@ def main():
                 "extrait": morceau, "marques": marques, "lien": row.get("url", ""),
                 "vu_le": vu_le,
             })
-
+    if not elus:
+        print(f"⚠ Aucun passage trouvé dans {os.getcwd()} : rien n'est écrit.\n"
+              "  Lancez la synthèse depuis le dossier des données (donnees-veille).")
+        sys.exit(1)
     # Score final : poids des mots-clés + 1 point par passage IA (plafonné à 10)
     for e in elus.values():
         e["score"] += min(len(e["passages"]), 10)
