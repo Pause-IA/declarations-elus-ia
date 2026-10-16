@@ -1,0 +1,13 @@
+# Déclenche veille-maj.service chaque matin
+[Unit]
+Description=Mise à jour quotidienne de la veille des élu·es
+
+[Timer]
+OnCalendar=*-*-* 06:00:00 Europe/Paris
+# Si le serveur était éteint à 6 h, rattraper au démarrage suivant
+Persistent=true
+# Étaler un peu le lancement (jusqu'à 10 min) pour ne pas solliciter les sources à heure fixe
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

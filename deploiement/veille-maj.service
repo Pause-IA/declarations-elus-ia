@@ -1,0 +1,14 @@
+# Lance une mise à jour complète de la veille (voir deploiement/README.md)
+[Unit]
+Description=Mise à jour de la veille des élu·es sur l'IA
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# À adapter : utilisateur sans privilèges, chemins du dépôt et des données
+User=veille
+EnvironmentFile=/opt/volunteer-apps/secrets/veille-elus.env
+ExecStart=/opt/declarations-elus-ia/scripts/mise_a_jour.sh /opt/volunteer-apps/data/veille-sources
+# Priorité basse : ne pas ralentir le CRM et les autres sites pendant l'analyse
+Nice=10
