@@ -71,7 +71,8 @@ qu'évoquée au passage.
 |---|---|---|---|---|
 | AN | `an-questions.zip` (JSON) | résumé et texte | 17e législature | `explore_an_questions.py` |
 | Sénat | `senat-questions.csv`, puis la page de chaque question retenue | titre, puis texte complet | 16/10/2025 → 15/10/2026 | `explore_senat_questions.py`, `textes_senat_questions.py` |
-| PE | dump Parltrack (`parltrack-activities.json.zst`) | titre seulement (en anglais) | 17/09/2024 → 15/07/2026 | `explore_pe_questions.py` |
+| PE | dump Parltrack (`parltrack-activities.json.zst`) | titre seulement | 17/09/2024 → 15/07/2026 | `explore_pe_questions.py` |
+| PE | API du Parlement européen, fiche de chaque question | titre (en français s'il existe) | depuis le 16/07/2026 | `explore_pe_questions_api.py` |
 
 ### Pièges rencontrés
 
@@ -86,10 +87,14 @@ qu'évoquée au passage.
 - **Sénat** : le CSV est en iso-8859-1 avec des « ; ». Il ne contient que les
   titres : le texte complet est récupéré sur senat.fr, avec une pause d'une
   seconde entre deux pages.
-- **PE** : l'API officielle ne donne ni titre ni texte, et les pages doceo sont
-  interdites aux robots (robots.txt). On passe par Parltrack, qui s'arrête au
-  24/07/2026. Les titres étant en anglais, le sigle « AI » est traduit avant
-  l'analyse. Les questions cosignées apparaissent sous chaque auteur.
+- **PE** : les pages doceo sont interdites aux robots (robots.txt). Parltrack a
+  pris le relais jusqu'au 24/07/2026, puis s'est arrêté. L'API officielle ne
+  donne que des identifiants dans sa liste : le titre, l'auteur et la date sont
+  dans la fiche de chaque question, qu'il faut demander en JSON-LD
+  (`Accept: application/ld+json` sur `data.europarl.europa.eu/eli/dl/doc/…`).
+  robots.txt y autorise les robots avec 2 s entre deux requêtes : les fiches
+  sont lues de la plus récente à la plus ancienne et gardées en cache.
+  Les questions cosignées apparaissent sous chaque auteur.
 
 ### Résultats
 
@@ -139,15 +144,33 @@ passage sur l'IA (plafonné à 10).
 Ajustements : « contrôle humain » 2, Sam Altman 2, Arthur Mensch 1, Yann LeCun 1.
 Ces poids sont à valider avec l'équipe plaidoyer.
 
-Version du 15/10/2026 : 514 personnes, dont 245 député·es, 170 sénateur·ices,
-47 eurodéputé·es, 48 membres du gouvernement et 4 personnalités auditionnées.
-
 ### Limites et suite
 
 - Questions du Sénat : un an d'historique seulement.
-- Questions du PE : titres seulement, et rien depuis mi-juillet 2026.
+- Questions du PE : titres seulement ; le texte complet est disponible en .docx
+  dans l'API, à exploiter plus tard.
 - Le tri par mots-clés reste un premier filtre : une seconde passe par LLM
   (clé à venir) permettrait de qualifier la position de chaque élu·e.
+
+## Automatisation (ajout du 16/10/2026)
+
+`scripts/mise_a_jour.sh` enchaîne téléchargements, exploration, synthèse et
+publication sur le site. Les téléchargements sont conditionnels (`curl -z`) :
+les serveurs de l'AN, du Sénat, de data.gouv.fr et de Parltrack répondent
+« inchangé » (304) quand rien n'a bougé. Un timer systemd
+(`deploiement/`) le lance chaque jour à 6 h, heure de Paris.
+
+Fréquence : une fois par jour suffit. L'AN publie ses comptes rendus le
+lendemain, le Sénat environ une semaine après, et les questions écrites
+paraissent au Journal officiel une fois par semaine.
+
+Mémoire des alertes : chaque passage est identifié par une empreinte
+(SHA-1 de l'élu·e, de la date et du début du texte), avec sa date de première
+apparition, dans `deja_vus.json`. Un passage d'au moins 4 points apparu depuis
+moins de 14 jours déclenche une alerte sur la page. Au premier lancement, tout
+est marqué « déjà vu » pour éviter des centaines de fausses alertes.
+
+Version du 16/10/2026 : 528 personnes.
 
 ## Conclusions
 

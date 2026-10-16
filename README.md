@@ -3,33 +3,70 @@ Repérage des prises de parole des parlementaires français sur les risques maje
 
 ## État actuel
 
-Étude de faisabilité terminée : voir [docs/etude-faisabilite.md](docs/etude-faisabilite.md).
+- Veille en ligne sur https://veille.pauseia.fr/ (accès réservé à l'équipe) :
+  528 personnes, alertes sur les nouveaux propos importants.
+- Mise à jour quotidienne automatique prête (`scripts/mise_a_jour.sh` et
+  `deploiement/`), en attente d'activation sur le serveur.
+- Étude de faisabilité, sources, mots-clés et limites :
+  [docs/etude-faisabilite.md](docs/etude-faisabilite.md).
 
-## Lancer les scripts d'exploration
+## Mettre à jour la veille
 
-Python 3, bibliothèque standard uniquement. Les données sont téléchargées dans un
-dossier `donnees/`, ignoré par Git, et les scripts se lancent depuis ce dossier.
+Python 3 (bibliothèque standard uniquement), `curl`, `unzip`, `zstd` et `flock`.
+Toute la chaîne tient en une commande :
 
 ```bash
-mkdir -p donnees && cd donnees
-
-# Assemblée nationale
-curl -L -o an-debats.zip https://data.assemblee-nationale.fr/static/openData/repository/17/vp/syceronbrut/syseron.xml.zip
-unzip -q an-debats.zip -d an
-python3 ../scripts/exploration/explore_an.py
-
-# Sénat (lu directement dans le ZIP, sans décompresser)
-curl -L -o senat-cri.zip https://data.senat.fr/data/debats/cri.zip
-python3 ../scripts/exploration/explore_senat.py
-
-# Parlement européen (API, rien à télécharger)
-python3 ../scripts/exploration/explore_pe.py
+scripts/mise_a_jour.sh [dossier_des_données]   # par défaut ~/PauseIA/donnees-veille
 ```
 
-`explore_pe.py` récupère la liste des eurodéputé·es français·es en poste
-directement depuis l'API du Parlement européen : rien d'autre à installer.
+Le script :
 
-Chaque script affiche un résumé et écrit le détail en CSV.
+1. **télécharge les sources seulement si elles ont changé** (`curl -z`) : un
+   lancement sans nouveauté ne retélécharge rien, pas même les 545 Mo du Sénat ;
+2. lance les scripts d'exploration (séances, puis questions écrites) ;
+3. lance la synthèse, qui écrit `synthese_elus.json` et met à jour la mémoire
+   des alertes (`deja_vus.json`) ;
+4. **publie** `synthese_elus.json` sur le site via `/televerser`, seulement si
+   `VEILLE_UPLOAD_TOKEN` est défini (adresse réglable par `VEILLE_URL`).
+
+Il s'arrête à la première erreur (`set -euo pipefail`) et refuse de se lancer
+deux fois en même temps (`flock`). Si la synthèse ne trouve aucune donnée, elle
+s'arrête sans rien écrire : rien n'est publié, le site garde sa version
+précédente. Compter environ 6 minutes la première fois, 4 ensuite.
+
+### Lancement quotidien
+
+`deploiement/veille-maj.service` et `deploiement/veille-maj.timer` lancent la
+mise à jour chaque jour à 6 h (heure de Paris), avec rattrapage si le serveur
+était éteint (`Persistent=true`). Chemins et utilisateur à adapter, puis :
+
+    sudo cp deploiement/veille-maj.* /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now veille-maj.timer
+
+Vérifier : `systemctl list-timers veille-maj.timer` (prochain lancement) et
+`journalctl -u veille-maj.service` (journal du dernier lancement).
+
+**À conserver** dans le dossier des données d'un lancement à l'autre :
+`deja_vus.json` (sans elle, le lancement suivant repart « à blanc », sans
+alerte) et `pe_questions_fiches.json` (cache du PE, sinon environ 30 min pour
+tout relire).
+
+### Les scripts un par un
+
+Depuis le dossier des données, `python3 <chemin>/scripts/exploration/<script>.py` :
+
+| Script | Source |
+|---|---|
+| `explore_an.py`, `explore_an_questions.py` | open data de l'Assemblée nationale (séances, questions écrites) |
+| `explore_senat.py`, `explore_senat_questions.py`, `textes_senat_questions.py` | open data du Sénat ; textes des questions sur senat.fr |
+| `explore_pe.py` | API du Parlement européen (séances) |
+| `explore_pe_questions.py` | Parltrack : questions écrites du PE jusqu'au 15/07/2026 |
+| `explore_pe_questions_api.py` | API du Parlement européen : questions écrites depuis le 16/07/2026 |
+| `synthese.py` | fusionne tout : `synthese_elus.csv` (Excel), `synthese_elus.json` (site) |
+
+Chaque script affiche un résumé et écrit le détail en CSV. Les données
+téléchargées et les résultats sont ignorés par Git.
 
 ## La page de veille, en ligne
 
@@ -68,7 +105,7 @@ dépôt passe en privé. L'adresse est construite à partir de cette configurati
 et jamais de la requête : un champ « URL à charger » ferait de ce service un
 moyen de frapper n'importe quelle machine depuis l'intérieur du réseau.
 
-Pour un script, le jour où la génération tournera dans un timer :
+C'est ce que fait `scripts/mise_a_jour.sh` (voir « Mettre à jour la veille ») :
 
     curl -F fichier=@synthese_elus.json \
          -H "X-Veille-Token: $VEILLE_UPLOAD_TOKEN" https://…/televerser
