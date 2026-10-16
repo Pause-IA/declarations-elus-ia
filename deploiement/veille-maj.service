@@ -3,12 +3,22 @@
 Description=Mise à jour de la veille des élu·es sur l'IA
 Wants=network-online.target
 After=network-online.target
+# Prévenir sur Discord si la mise à jour échoue. Sans ça, une veille qui cesse
+# de se mettre à jour ne se voit pas : la page continue d'afficher les données
+# de l'avant-veille, avec une date qui ne bouge plus, et ça peut durer des
+# semaines. L'unité modèle est déjà installée sur le serveur, utilisée par les
+# travaux du CRM (sync-officials, backup-db, les imports de courriels).
+OnFailure=alerte@%n.service
 
 [Service]
 Type=oneshot
 # À adapter : utilisateur sans privilèges, chemins du dépôt et des données
 User=veille
-EnvironmentFile=/opt/volunteer-apps/secrets/veille-elus.env
+# Seulement le jeton de dépôt, pas le fichier de secrets du site : celui-ci
+# porte aussi le mot de passe et la clé de session, dont ce travail n'a aucun
+# besoin. Un processus qui tourne chaque nuit n'a pas à les avoir dans son
+# environnement.
+EnvironmentFile=/opt/volunteer-apps/secrets/veille-maj.env
 ExecStart=/opt/declarations-elus-ia/scripts/mise_a_jour.sh /opt/volunteer-apps/data/veille-sources
 # Priorité basse : ne pas ralentir le CRM et les autres sites pendant l'analyse
 Nice=10
