@@ -7,10 +7,10 @@ interdites aux robots. Seul le titre (en anglais) est disponible.
 import csv
 import json
 import re
-import urllib.request
 from collections import Counter
 
 from motscles import analyser, decrire
+from reseau import lire_json
 
 API_MEPS = ("https://data.europarl.europa.eu/api/v2/meps/show-current"
             "?format=application%2Fld%2Bjson&offset=0&limit=1000")
@@ -23,9 +23,7 @@ SIGLE_AI = re.compile(r"(?<![\w-])AI(?![\w-])")
 
 def eurodeputes_fr():
     """Renvoie {identifiant: (nom, groupe)} pour les élu·es français·es."""
-    requete = urllib.request.Request(API_MEPS, headers={"User-Agent": "PauseIA-veille"})
-    with urllib.request.urlopen(requete, timeout=60) as reponse:
-        donnees = json.load(reponse)["data"]
+    donnees = lire_json(API_MEPS)["data"]   # reprises : voir reseau.py
     resultat = {}
     for m in donnees:
         if m.get("api:country-of-representation") != "FR":

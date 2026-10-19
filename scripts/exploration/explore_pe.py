@@ -1,14 +1,13 @@
 """Exploration : interventions en plénière des eurodéputé·es français·es qui
 parlent d'IA ou contiennent un mot-clé (voir motscles.py)."""
 import csv
-import json
 import time
 import urllib.parse
-import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
 
 from motscles import analyser, decrire
+from reseau import lire_json
 
 API = "https://data.europarl.europa.eu/api/v2/speeches"
 API_MEPS = "https://data.europarl.europa.eu/api/v2/meps/show-current"
@@ -23,10 +22,10 @@ XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
 
 def appel(params, adresse=API):
-    url = adresse + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "PauseIA-veille-exploration"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return {} if r.status == 204 else json.load(r)
+    # Les reprises sont dans reseau : cette API renvoie des 500 passagers, et
+    # sans elles le premier échec faisait tomber tout le passage quotidien.
+    return lire_json(adresse + "?" + urllib.parse.urlencode(params),
+                     {"User-Agent": "PauseIA-veille-exploration"})
 
 
 def eurodeputes_fr():
