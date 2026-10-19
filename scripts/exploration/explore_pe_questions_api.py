@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections import Counter
 from datetime import date
@@ -28,16 +29,54 @@ TYPES = ("QUESTION_WRITTEN", "QUESTION_WRITTEN_PRIORITY")
 PAR_PAGE = 100
 PAUSE = 2             # Crawl-delay de robots.txt
 ARRET = 30            # fiches plus anciennes que DEPUIS d'affilée avant d'arrêter
+ESSAIS = 5            # tentatives par requête : l'API renvoie des 500 passagers
+ATTENTES = (3, 8, 20, 45)  # secondes avant chaque nouvelle tentative
+INCOMPLET = []        # (année, type) dont la liste n'a pas pu être lue en entier
 CACHE = "pe_questions_fiches.json"
 SORTIE = "passages_pe_questions_recentes.csv"
 SIGLE_AI = re.compile(r"(?<![\w-])AI(?![\w-])")
 
 
 def lire_json(adresse):
+    """Lit une adresse de l'API, en réessayant tant que l'erreur est passagère.
+
+    Le 19/10/2026 l'API a renvoyé « HTTP Error 500 » environ une fois sur cinq,
+    de façon intermittente : la même adresse demandée cinq fois de suite a
+    répondu quatre fois 200 et une fois 500. Sans reprise, un passage qui
+    enchaîne une quinzaine de requêtes de structure n'avait donc presque aucune
+    chance d'aboutir, et il échouait en entier.
+
+    On réessaie sur 5xx, sur 429 et sur une panne réseau, en espaçant les
+    tentatives. Une erreur 4xx (hors 429) vient de notre requête, pas du
+    serveur : la réessayer ne servirait à rien, donc elle remonte tout de suite.
+
+    « 204 No Content » n'est pas une erreur : c'est la réponse de l'API quand on
+    demande une page au-delà de la dernière. Le corps est vide, donc json.load
+    y levait une exception. On rend une réponse vide, que l'appelant lit comme
+    une fin de liste.
+    """
     requete = urllib.request.Request(adresse, headers={
         "User-Agent": "PauseIA-veille", "Accept": "application/ld+json"})
-    with urllib.request.urlopen(requete, timeout=60) as reponse:
-        return json.load(reponse)
+    for tentative in range(ESSAIS):
+        try:
+            with urllib.request.urlopen(requete, timeout=60) as reponse:
+                if reponse.status == 204:
+                    return {}
+                corps = reponse.read()
+                return json.loads(corps) if corps.strip() else {}
+        except urllib.error.HTTPError as err:
+            passagere = err.code >= 500 or err.code == 429
+            if not passagere or tentative == ESSAIS - 1:
+                raise
+            motif = f"HTTP {err.code}"
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as err:
+            if tentative == ESSAIS - 1:
+                raise
+            motif = f"{type(err).__name__}: {err}"
+        attente = ATTENTES[min(tentative, len(ATTENTES) - 1)]
+        print(f"  … {motif}, nouvelle tentative dans {attente} s",
+              file=sys.stderr, flush=True)
+        time.sleep(attente)
 
 
 def eurodeputes_fr():
@@ -52,12 +91,25 @@ def eurodeputes_fr():
 
 
 def identifiants(annee, type_q):
-    """Tous les identifiants d'une année et d'un type, page par page."""
+    """Tous les identifiants d'une année et d'un type, page par page.
+
+    Si une page reste en échec après toutes les tentatives, on rend ce qu'on a
+    déjà et on retient l'année dans INCOMPLET : les identifiants manquants
+    seront lus au passage suivant, puisque le cache ne garde que les fiches
+    réussies. Mieux vaut une liste partielle qu'aucune donnée du tout.
+    """
     tous, offset = [], 0
     while True:
-        page = lire_json(f"{API}/parliamentary-questions?year={annee}&work-type={type_q}"
-                         f"&format=application%2Fld%2Bjson&offset={offset}"
-                         f"&limit={PAR_PAGE}").get("data", [])
+        try:
+            page = lire_json(f"{API}/parliamentary-questions?year={annee}&work-type={type_q}"
+                             f"&format=application%2Fld%2Bjson&offset={offset}"
+                             f"&limit={PAR_PAGE}").get("data", [])
+        except (OSError, ValueError) as err:
+            print(f"  ✗ {annee} {type_q} à l'offset {offset} : {err} — "
+                  f"liste partielle ({len(tous)} identifiants)",
+                  file=sys.stderr, flush=True)
+            INCOMPLET.append((annee, type_q))
+            return tous
         tous += [q.get("identifier") or q["id"].split("/")[-1] for q in page]
         print(f"  {annee} {type_q} : {len(tous)} identifiants…", flush=True)
         time.sleep(PAUSE)
@@ -140,6 +192,14 @@ def main():
     for l in lignes[:30]:
         print(f"  {l['date']}  {l['orateur']} : {l['texte']}")
     print(f"\nDétail : {SORTIE}")
+
+    # Le fichier est écrit et le cache sauvé : la synthèse peut travailler. Mais
+    # on sort en erreur pour que le passage se signale, sinon une source qui se
+    # dégrade s'installerait sans que personne le sache.
+    if INCOMPLET:
+        manquantes = ", ".join(f"{a} {t}" for a, t in INCOMPLET)
+        raise SystemExit(f"Listes incomplètes ({manquantes}) : "
+                         f"l'API a échoué après {ESSAIS} tentatives.")
 
 
 if __name__ == "__main__":

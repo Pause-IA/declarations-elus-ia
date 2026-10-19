@@ -17,6 +17,20 @@ flock -n 9 || { echo "Une mise à jour est déjà en cours, abandon."; exit 0; }
 
 etape() { echo; echo "== $(date '+%H:%M:%S') $*"; }
 
+# Une source qui échoue ne doit pas coûter les autres. Le script d'exploration
+# qui tombe laisse son CSV du passage précédent en place, la synthèse travaille
+# avec, la page est publiée — et on sort quand même en erreur à la fin pour que
+# l'alerte parte. Sans ce dernier point, une source en panne depuis des semaines
+# ne se verrait pas : la page resterait fraîche avec des données figées.
+ECHECS=()
+explorer() {
+    local script="$1"
+    if ! python3 "$SCRIPTS/$script" > /dev/null; then
+        echo "  ✗ $script a échoué — on garde ses données du passage précédent" >&2
+        ECHECS+=("$script")
+    fi
+}
+
 # Télécharge seulement si la source a changé depuis notre copie.
 # Renvoie 0 si le fichier a été mis à jour, 1 s'il est inchangé ; arrête tout en cas d'erreur.
 telecharger() {
@@ -57,16 +71,16 @@ telecharger deputes_datan.csv \
 telecharger senateurs.csv https://data.senat.fr/data/senateurs/ODSEN_GENERAL.csv || true
 
 etape "Séances"
-python3 "$SCRIPTS/explore_an.py" > /dev/null
-python3 "$SCRIPTS/explore_senat.py" > /dev/null
-python3 "$SCRIPTS/explore_pe.py" > /dev/null
+explorer explore_an.py
+explorer explore_senat.py
+explorer explore_pe.py
 
 etape "Questions écrites"
-python3 "$SCRIPTS/explore_an_questions.py" > /dev/null
-python3 "$SCRIPTS/explore_senat_questions.py" > /dev/null
-python3 "$SCRIPTS/textes_senat_questions.py" > /dev/null
-python3 "$SCRIPTS/explore_pe_questions.py" > /dev/null
-python3 "$SCRIPTS/explore_pe_questions_api.py" > /dev/null
+explorer explore_an_questions.py
+explorer explore_senat_questions.py
+explorer textes_senat_questions.py
+explorer explore_pe_questions.py
+explorer explore_pe_questions_api.py
 
 etape "Synthèse"
 python3 "$SCRIPTS/synthese.py" > synthese.log
@@ -81,4 +95,12 @@ if [ -n "${VEILLE_UPLOAD_TOKEN:-}" ]; then
 else
     echo "  (VEILLE_UPLOAD_TOKEN absent : rien n'est publié, le fichier est prêt dans $DONNEES)"
 fi
+if [ ${#ECHECS[@]} -gt 0 ]; then
+    etape "Terminé, avec des sources en échec"
+    printf '  ✗ %s\n' "${ECHECS[@]}" >&2
+    echo "La page est à jour pour les autres sources ; celles-ci gardent leurs" >&2
+    echo "données du passage précédent." >&2
+    exit 1
+fi
+
 etape "Terminé"
