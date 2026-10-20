@@ -32,10 +32,20 @@ explorer() {
 }
 
 # Télécharge seulement si la source a changé depuis notre copie.
-# Renvoie 0 si le fichier a été mis à jour, 1 s'il est inchangé ; arrête tout en cas d'erreur.
+# Renvoie 0 si le fichier a été mis à jour, 1 s'il est inchangé ou si la source
+# a échoué alors qu'on a déjà une copie. N'arrête tout que si le fichier manque
+# complètement : là, il n'y a rien à analyser.
+#
+# --http1.1 : le 20/10/2026 le serveur de l'Assemblée a coupé une connexion en
+# cours (« curl: (92) HTTP/2 stream 1 was not closed cleanly: PROTOCOL_ERROR »).
+# Ces dumps font des centaines de Mo sur une seule connexion, et HTTP/2
+# n'apporte rien ici — il n'y a pas des dizaines de petites requêtes à
+# multiplexer. On prend donc le protocole le plus robuste.
+# --retry-all-errors : sans ça, --retry ignore justement ce type de coupure.
 telecharger() {
     local fichier="$1" adresse="$2" code
-    local options=(-sSL -R --retry 3 -o "$fichier.tmp" -w '%{http_code}')
+    local options=(-sSL -R --http1.1 --retry 3 --retry-all-errors
+                   -o "$fichier.tmp" -w '%{http_code}')
     [ -f "$fichier" ] && options+=(-z "$fichier")
     code=$(curl "${options[@]}" "$adresse") || code="erreur"
     if [ "$code" = 200 ]; then
@@ -48,7 +58,16 @@ telecharger() {
         echo "  = $fichier inchangé"
         return 1
     fi
-    echo "  ✗ $fichier : échec ($code)" >&2
+    # Une source injoignable dont on garde une copie : on travaille avec, et le
+    # passage se signalera en erreur à la fin. Mieux vaut une veille d'un jour
+    # de retard sur une source qu'aucune mise à jour du tout sur les six.
+    if [ -f "$fichier" ]; then
+        echo "  ✗ $fichier : échec ($code) — on garde la copie précédente" >&2
+        ECHECS+=("téléchargement de $fichier")
+        return 1
+    fi
+    # Rien en réserve : il n'y a rien à analyser, autant s'arrêter là.
+    echo "  ✗ $fichier : échec ($code), et aucune copie précédente" >&2
     exit 1
 }
 
