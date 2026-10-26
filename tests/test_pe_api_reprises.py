@@ -60,6 +60,7 @@ class SansReseau(unittest.TestCase):
         self.vrai_sleep = reseau.time.sleep
         reseau.time.sleep = lambda _: None
         pe.INCOMPLET.clear()
+        pe.ILLISIBLES.clear()
         self.vrai_stderr, sys.stderr = sys.stderr, io.StringIO()
 
     def tearDown(self):
@@ -67,6 +68,7 @@ class SansReseau(unittest.TestCase):
         reseau.time.sleep = self.vrai_sleep
         sys.stderr = self.vrai_stderr
         pe.INCOMPLET.clear()
+        pe.ILLISIBLES.clear()
 
     def repond(self, *suite):
         faux = FauxReseau(*suite)
@@ -137,12 +139,50 @@ class TestIdentifiants(SansReseau):
         self.assertEqual(pe.INCOMPLET, [])
 
     def test_page_en_echec_rend_une_liste_partielle(self):
-        """Mieux vaut les 100 premiers identifiants que rien du tout."""
+        """API en panne (ni la page ni aucun morceau ne passe) : on garde les
+        100 premiers identifiants plutôt que rien du tout, et on le signale."""
+        morceaux_en_echec = [erreur(500)] * (pe.ESSAIS_MORCEAU * (pe.PAR_PAGE // pe.MORCEAU))
         self.repond(self.page(pe.PAR_PAGE),
-                    *[erreur(500)] * reseau.ESSAIS)
+                    *[erreur(500)] * reseau.ESSAIS, *morceaux_en_echec)
         obtenus = pe.identifiants(2026, "QUESTION_WRITTEN")
         self.assertEqual(len(obtenus), pe.PAR_PAGE)
         self.assertEqual(pe.INCOMPLET, [(2026, "QUESTION_WRITTEN")])
+        self.assertEqual(pe.ILLISIBLES, [])
+
+    def test_une_question_illisible_ne_coupe_plus_la_liste(self):
+        """Le cas du 26/10/2026 : la page de la 2 001e question écrite répond
+        toujours 500, la suivante répond bien. On ne doit perdre que la question
+        fautive, pas toutes celles qui suivent."""
+        P, M = pe.PAR_PAGE, pe.MORCEAU
+        suite = [self.page(P)]                                  # page 0 : bonne
+        suite += [erreur(500)] * reseau.ESSAIS                  # page 1 : en échec
+        suite += [self.page(M, P)]                              # morceau 100-109
+        suite += [erreur(500)] * pe.ESSAIS_MORCEAU              # morceau 110-119 : en échec
+        suite += [self.page(M, P + d) for d in range(2 * M, P, M)]  # morceaux 120-199
+        # Le morceau 110-119 relu question par question : la 114 est fautive.
+        for position in range(P + M, P + 2 * M):
+            if position == P + M + 4:
+                suite += [erreur(500)] * pe.ESSAIS_MORCEAU
+            else:
+                suite.append(self.page(1, position))
+        suite.append(self.page(2, 2 * P))                       # page 2 : fin de liste
+        self.repond(*suite)
+        obtenus = pe.identifiants(2026, "QUESTION_WRITTEN")
+        self.assertEqual(len(obtenus), 2 * P + 2 - 1)           # tout sauf la fautive
+        self.assertNotIn(f"Q-{P + M + 4}", obtenus)
+        self.assertIn(f"Q-{2 * P + 1}", obtenus)                # la suite est bien lue
+        self.assertEqual(obtenus, sorted(obtenus, key=lambda q: int(q[2:])))  # ordre gardé
+        self.assertEqual(pe.ILLISIBLES, [(2026, "QUESTION_WRITTEN", P + M + 4)])
+        self.assertEqual(pe.INCOMPLET, [])
+
+    def test_fin_de_liste_dans_une_page_relue(self):
+        """La page en échec est la dernière : le morceau incomplet clôt la liste."""
+        P, M = pe.PAR_PAGE, pe.MORCEAU
+        self.repond(self.page(P), *[erreur(500)] * reseau.ESSAIS,
+                    self.page(M, P), self.page(3, P + M))
+        obtenus = pe.identifiants(2026, "QUESTION_WRITTEN")
+        self.assertEqual(len(obtenus), P + M + 3)
+        self.assertEqual(pe.INCOMPLET, [])
 
     def test_500_passager_ne_coupe_pas_la_pagination(self):
         """Deux pages pleines, un 500 au milieu : la liste doit être entière."""
@@ -158,6 +198,26 @@ class TestIdentifiants(SansReseau):
         self.assertEqual(len(pe.identifiants(2026, "QUESTION_WRITTEN")), pe.PAR_PAGE)
         self.assertEqual(pe.INCOMPLET, [])
 
+
+
+class TestFiche(SansReseau):
+    def test_le_format_json_est_demande(self):
+        """Sans `format`, l'API rend certaines fiches en XML (constaté le 26/10/2026)."""
+        faux = self.repond(Reponse(
+            b'{"data": [{"document_date": "2026-10-20T00:00:00", '
+            b'"creator": ["person/94649"], "title_dcterms": {"fr": "IA et emploi"}}]}'))
+        adresses = []
+        vrai = faux.__call__
+
+        def espion(requete, timeout=None):
+            adresses.append(requete.full_url)
+            return vrai(requete, timeout)
+
+        reseau.urllib.request.urlopen = espion
+        q = pe.fiche("E-10-2026-000047")
+        self.assertIn("format=application%2Fld%2Bjson", adresses[0])
+        self.assertEqual(q, {"date": "2026-10-20", "auteurs": ["94649"],
+                             "titre": "IA et emploi"})
 
 if __name__ == "__main__":
     unittest.main()

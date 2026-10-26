@@ -21,8 +21,12 @@ ATTENTES = (3, 8, 20, 45)  # secondes avant chaque nouvelle tentative
 AGENT = "PauseIA-veille"
 
 
-def ouvrir(adresse, entetes=None, timeout=60):
+def ouvrir(adresse, entetes=None, timeout=60, essais=ESSAIS):
     """Le corps de la réponse, en octets. b"" si la source répond « sans contenu ».
+
+    `essais` : nombre de tentatives (ESSAIS par défaut). Moins quand on sonde
+    une page déjà connue pour échouer, pour ne pas attendre une minute et demie
+    à chaque morceau.
 
     « 204 No Content » n'est pas une erreur : c'est ce que répond l'API quand on
     demande une page au-delà de la dernière. L'appelant le lit comme une fin de
@@ -30,16 +34,16 @@ def ouvrir(adresse, entetes=None, timeout=60):
     """
     requete = urllib.request.Request(
         adresse, headers=entetes or {"User-Agent": AGENT})
-    for tentative in range(ESSAIS):
+    for tentative in range(essais):
         try:
             with urllib.request.urlopen(requete, timeout=timeout) as reponse:
                 return b"" if reponse.status == 204 else reponse.read()
         except urllib.error.HTTPError as err:
-            if not (err.code >= 500 or err.code == 429) or tentative == ESSAIS - 1:
+            if not (err.code >= 500 or err.code == 429) or tentative == essais - 1:
                 raise
             motif = f"HTTP {err.code}"
         except (urllib.error.URLError, TimeoutError) as err:
-            if tentative == ESSAIS - 1:
+            if tentative == essais - 1:
                 raise
             motif = f"{type(err).__name__}: {err}"
         attente = ATTENTES[min(tentative, len(ATTENTES) - 1)]
@@ -48,9 +52,9 @@ def ouvrir(adresse, entetes=None, timeout=60):
         time.sleep(attente)
 
 
-def lire_json(adresse, entetes=None, timeout=60):
+def lire_json(adresse, entetes=None, timeout=60, essais=ESSAIS):
     """Le JSON d'une adresse. {} si la réponse est vide (fin de liste)."""
-    corps = ouvrir(adresse, entetes, timeout)
+    corps = ouvrir(adresse, entetes, timeout, essais)
     return json.loads(corps) if corps.strip() else {}
 
 

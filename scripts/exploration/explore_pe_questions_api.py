@@ -29,6 +29,10 @@ PAR_PAGE = 100
 PAUSE = 2             # Crawl-delay de robots.txt
 ARRET = 30            # fiches plus anciennes que DEPUIS d'affilée avant d'arrêter
 INCOMPLET = []        # (année, type) dont la liste n'a pas pu être lue en entier
+MORCEAU = 10          # taille des morceaux quand une page entière échoue
+ESSAIS_MORCEAU = 2    # tentatives par morceau (la page a déjà échoué 5 fois)
+ILLISIBLES = []       # (année, type, position) : questions que l'API ne sait pas servir
+SEUIL_ILLISIBLES = 5  # au-delà, ce n'est plus une question abîmée mais une panne
 CACHE = "pe_questions_fiches.json"
 SORTIE = "passages_pe_questions_recentes.csv"
 SIGLE_AI = re.compile(r"(?<![\w-])AI(?![\w-])")
@@ -45,37 +49,113 @@ def eurodeputes_fr():
     return resultat
 
 
+def lire_page(annee, type_q, offset, limite, essais=ESSAIS):
+    """Les questions d'une page de la liste (offset, limite)."""
+    return lire_json(f"{API}/parliamentary-questions?year={annee}&work-type={type_q}"
+                     f"&format=application%2Fld%2Bjson&offset={offset}"
+                     f"&limit={limite}", essais=essais).get("data", [])
+
+
+def idents(page):
+    return [q.get("identifier") or q["id"].split("/")[-1] for q in page]
+
+
+class PageIllisible(Exception):
+    """Une page dont aucun morceau ne passe : l'API est en panne, pas une question."""
+
+
+def relire_par_morceaux(annee, type_q, offset):
+    """Relit une page en échec par morceaux de MORCEAU, puis question par question.
+
+    Constaté le 26/10/2026 : l'API répond « HTTP 500 » à chaque fois sur la
+    page qui commence à la 2 001e question écrite de 2026, et sur elle seule (la
+    page suivante répond normalement). Une question de cette page, sans doute,
+    que le serveur du Parlement ne sait pas mettre en forme. S'arrêter là, comme
+    avant, faisait perdre toutes les questions suivantes : les plus récentes,
+    celles que la veille cherche.
+
+    On isole donc la ou les questions fautives et on continue. Renvoie
+    (identifiants, positions illisibles, fin de liste atteinte). Si aucun
+    morceau ne passe, c'est une panne de l'API : PageIllisible.
+    """
+    morceaux = []
+    for debut in range(offset, offset + PAR_PAGE, MORCEAU):
+        try:
+            m = lire_page(annee, type_q, debut, MORCEAU, ESSAIS_MORCEAU)
+        except (OSError, ValueError):
+            morceaux.append((debut, None))
+            continue
+        morceaux.append((debut, m))
+        time.sleep(PAUSE)
+        if len(m) < MORCEAU:  # fin de liste dans cette page
+            break
+    if all(m is None for _d, m in morceaux):
+        raise PageIllisible
+
+    ids, illisibles = [], []
+    fin = morceaux[-1][1] is not None and len(morceaux[-1][1]) < MORCEAU
+    for debut, m in morceaux:
+        if m is not None:
+            ids += idents(m)
+            continue
+        for position in range(debut, debut + MORCEAU):
+            try:
+                une = lire_page(annee, type_q, position, 1, ESSAIS_MORCEAU)
+            except (OSError, ValueError):
+                illisibles.append(position)
+                continue
+            time.sleep(PAUSE)
+            if not une:  # au-delà de la dernière question
+                return ids, illisibles, True
+            ids += idents(une)
+    return ids, illisibles, fin
+
+
 def identifiants(annee, type_q):
     """Tous les identifiants d'une année et d'un type, page par page.
 
-    Si une page reste en échec après toutes les tentatives, on rend ce qu'on a
-    déjà et on retient l'année dans INCOMPLET : les identifiants manquants
+    Une page en échec après toutes les tentatives est relue par morceaux, pour
+    ne perdre que la ou les questions que l'API ne sait pas servir (gardées dans
+    ILLISIBLES). Si même les morceaux échouent, c'est une panne : on rend ce
+    qu'on a et on retient l'année dans INCOMPLET ; les identifiants manquants
     seront lus au passage suivant, puisque le cache ne garde que les fiches
     réussies. Mieux vaut une liste partielle qu'aucune donnée du tout.
     """
     tous, offset = [], 0
     while True:
         try:
-            page = lire_json(f"{API}/parliamentary-questions?year={annee}&work-type={type_q}"
-                             f"&format=application%2Fld%2Bjson&offset={offset}"
-                             f"&limit={PAR_PAGE}").get("data", [])
+            page = lire_page(annee, type_q, offset, PAR_PAGE)
+            nouveaux, fin = idents(page), len(page) < PAR_PAGE
         except (OSError, ValueError) as err:
-            print(f"  ✗ {annee} {type_q} à l'offset {offset} : {err} — "
-                  f"liste partielle ({len(tous)} identifiants)",
-                  file=sys.stderr, flush=True)
-            INCOMPLET.append((annee, type_q))
-            return tous
-        tous += [q.get("identifier") or q["id"].split("/")[-1] for q in page]
+            print(f"  ! {annee} {type_q} à l'offset {offset} : {err} — "
+                  f"relecture par morceaux", file=sys.stderr, flush=True)
+            try:
+                nouveaux, illisibles, fin = relire_par_morceaux(annee, type_q, offset)
+            except PageIllisible:
+                print(f"  ✗ {annee} {type_q} à l'offset {offset} : aucun morceau ne "
+                      f"passe — liste partielle ({len(tous)} identifiants)",
+                      file=sys.stderr, flush=True)
+                INCOMPLET.append((annee, type_q))
+                return tous
+            for position in illisibles:
+                print(f"  ⚠ {annee} {type_q} : la question n° {position + 1} de la liste "
+                      f"est illisible côté Parlement, ignorée",
+                      file=sys.stderr, flush=True)
+                ILLISIBLES.append((annee, type_q, position))
+        tous += nouveaux
         print(f"  {annee} {type_q} : {len(tous)} identifiants…", flush=True)
         time.sleep(PAUSE)
-        if len(page) < PAR_PAGE:
+        if fin:
             return tous
         offset += PAR_PAGE
 
 
 def fiche(identifiant):
     """{date, auteurs, titre} d'une question (titre en français, sinon en anglais)."""
-    d = lire_json(ELI + identifiant)["data"][0]
+    # Le format est demandé explicitement, comme pour les listes : sans lui,
+    # l'API rend certaines fiches en XML (RDF), illisibles en JSON. Constaté le
+    # 26/10/2026 sur 37 questions du début de 2026, redemandées à chaque passage.
+    d = lire_json(f"{ELI}{identifiant}?format=application%2Fld%2Bjson")["data"][0]
     titres = d.get("title_dcterms", {})
     return {
         "date": d.get("document_date", "")[:10],
@@ -151,10 +231,20 @@ def main():
     # Le fichier est écrit et le cache sauvé : la synthèse peut travailler. Mais
     # on sort en erreur pour que le passage se signale, sinon une source qui se
     # dégrade s'installerait sans que personne le sache.
+    # Quelques questions isolées que le Parlement ne sait pas servir : on le
+    # note, sans faire échouer le passage. Elles reviendraient chaque jour, et
+    # une alerte quotidienne sur une erreur qu'on ne peut pas corriger finit
+    # par ne plus être lue. Au-delà du seuil, c'est une panne : là, on alerte.
+    if ILLISIBLES:
+        print(f"Note : {len(ILLISIBLES)} question(s) illisible(s) côté Parlement, "
+              f"ignorée(s) : " + ", ".join(f"{a} {t} n° {p + 1}" for a, t, p in ILLISIBLES))
     if INCOMPLET:
         manquantes = ", ".join(f"{a} {t}" for a, t in INCOMPLET)
         raise SystemExit(f"Listes incomplètes ({manquantes}) : "
                          f"l'API a échoué après {ESSAIS} tentatives.")
+    if len(ILLISIBLES) > SEUIL_ILLISIBLES:
+        raise SystemExit(f"{len(ILLISIBLES)} questions illisibles (seuil : "
+                         f"{SEUIL_ILLISIBLES}) : l'API du Parlement se dégrade.")
 
 
 if __name__ == "__main__":
