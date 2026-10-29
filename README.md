@@ -63,7 +63,7 @@ Depuis le dossier des données, `python3 <chemin>/scripts/exploration/<script>.p
 | `explore_pe.py` | API du Parlement européen (séances) |
 | `explore_pe_questions.py` | Parltrack : questions écrites du PE jusqu'au 15/07/2026 |
 | `explore_pe_questions_api.py` | API du Parlement européen : questions écrites depuis le 16/07/2026 |
-| `synthese.py` | fusionne tout : `synthese_elus.csv` (Excel), `synthese_elus.json` (site) |
+| `synthese.py` | fusionne tout : `synthese_elus.csv` (Excel), `synthese_elus.json` (site, et CRM : `ids_officiels` donne pour chaque élu·e son PA… à l'AN, son matricule au Sénat ou son numéro au PE) |
 
 Chaque script affiche un résumé et écrit le détail en CSV. Les données
 téléchargées et les résultats sont ignorés par Git.

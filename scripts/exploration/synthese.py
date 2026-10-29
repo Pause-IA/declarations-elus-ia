@@ -169,14 +169,18 @@ def main():
                 "nom": nettoyer_nom(nom), "chambre": ch, "groupe": "",
                 "passages": set(), "types": set(), "mots": defaultdict(set),
                 "dates": [], "score": 0, "meilleur": (-1, "", "", ""),
-                "liste":[],
+                "liste":[], "ids": set(),
             })
             empreinte = (row.get("date", ""), texte[:200])
             if empreinte in e["passages"]:
                 continue  # même passage lu deux fois
             e["passages"].add(empreinte)
             e["types"].add(type_)
-            officiel = row.get("id_acteur") or row.get("matricule") or ""
+            officiel = row.get("id_acteur") or row.get("matricule") or row.get("id_pe") or ""
+            if officiel:
+                # PA… (AN), matricule (Sénat), numéro (PE) : de quoi relier
+                # l'élu·e à sa fiche dans le CRM sans se fier au seul nom.
+                e["ids"].add(officiel)
             if ch != "Gouvernement":  # un ministre ne siège plus dans un groupe
                 e["groupe"] = e["groupe"] or row.get("groupe", "") or groupes.get(officiel, "")
             e["dates"].append(row.get("date", ""))
@@ -232,6 +236,7 @@ def main():
         dates = sorted(d for d in e["dates"] if d)
         personnes.append({
             "nom": e["nom"], "chambre": e["chambre"], "groupe": e["groupe"],
+            "ids_officiels": sorted(e["ids"]),
             "score": e["score"], "nb_passages": len(e["passages"]),
             "types": sorted(e["types"]),
             "mots": {f: sorted(e["mots"][f]) for f in ORDRE if e["mots"].get(f)},
